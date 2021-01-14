@@ -20,18 +20,21 @@ ____
     * [core features](#core-features)
         * [transports](#transports)
         * [auto proxy for agents without direct internet access](#auto-proxy-for-agents-without-direct-internet-access)
+        * [anti-antivirus (or anti-whateveryoucallthem)](#anti-antivirus-or-anti-whateveryoucallthem)
         * [agent traffic](#agent-traffic)
         * [packer - start agent in memory](#packer---start-agent-in-memory)
         * [dropper - pure memory based agent launching](#dropper---pure-memory-based-agent-launching)
         * [hide processes and files](#hide-processes-and-files)
         * [persistence](#persistence)
     * [modules](#modules)
+        * [shellcode loader](#shellcode-loader)
         * [basic command shell](#basic-command-shell)
         * [fully interactive and stealth bash shell](#fully-interactive-and-stealth-bash-shell)
         * [credential harvesting](#credential-harvesting)
         * [auto root](#auto-root)
         * [LPE suggest](#lpe-suggest)
         * [port mapping](#port-mapping)
+        * [reverse port mapping (interoperability with other frameworks)](#reverse-port-mapping-interoperability-with-other-frameworks)
         * [plugin system](#plugin-system)
 * [thanks](#thanks)
 
@@ -43,10 +46,13 @@ ____
 - [x] packer: cryptor + `memfd_create`
 - [x] packer: use `shm_open` in older Linux kernels
 - [x] dropper: shellcode injector - python
-- [ ] injector: inject shellcode into another process, using GDB
-- [ ] port mapping: forward from CC to agents, so you can use encapsulate other tools (such as Cobalt Strike) in emp3r0r's CC tunnel
-- [ ] dropper: shellcode injector - dd
-- [ ] dropper: downloader (stage 0) shellcode
+- [x] port mapping: forward from CC to agents, so you can use encapsulate other tools (such as Cobalt Strike) in emp3r0r's CC tunnel
+- [x] randomize everything that can be randomized (file path, port number, etc)
+- [x] injector: shellcode loader, using python2
+- [x] injector: inject shellcode into arbitrary process, using go and ptrace syscall
+- [ ] injector: recover process after injection
+- [ ] persistence: inject guardian shellcode into arbitrary process to gain persistence
+- [ ] store `vaccine` files in anonymous memory location instead of `/dev/shm`
 - [ ] network scanner
 - [ ] passive scanner, for host/service discovery
 - [ ] exploit kit
@@ -77,6 +83,7 @@ i hope this tool helps you, and i will add features to it as i learn new things
 * **post-exploitation tools** like nmap, socat, are integreted with reverse shell
 * **credential harvesting**
 * process **injection**
+* **shellcode** injection and dropper
 * ELF **patcher**
 * **hide processes and files** via libc hijacking
 * port mapping, socks5 **proxy**
@@ -86,10 +93,12 @@ i hope this tool helps you, and i will add features to it as i learn new things
 * file management
 * log cleaner
 * **stealth** connection
+* anti-antivirus
 * internet access checker
 * **autoproxy** for semi-isolated networks
 * all of these in one **HTTP2** connection
 * can be encapsulated in any external proxies such as **TOR**, and **CDNs**
+* interoperability with **metasploit / Cobalt Strike**
 * and many more...
 
 ### core features
@@ -113,6 +122,13 @@ if an agent doesn't have internet, its going to listen for such broadcasts. when
 in the following example, we have 3 agents, among which only one (`[1]`) has internet access, and `[0]` has to use the proxy passed by `[2]`
 
 ![autoproxy](./img/autoproxy.webp)
+
+#### anti-antivirus (or anti-whateveryoucallthem)
+
+- a cryptor that loads agent into memory
+- shellcode dropper
+- everything is randomized
+- one agent build for each target
 
 #### agent traffic
 
@@ -163,6 +179,14 @@ currently implemented methods:
 more will be added in the future
 
 ### modules
+
+#### shellcode loader
+
+this module helps you execute meterpreter or Cobalt Strike shellcode directly in emp3r0r's memory,
+combined with [reverse_portfwd](#reverse-port-mapping-interoperability-with-other-frameworks),
+you can use other post-exploitation frameworks right inside emp3r0r
+
+![shellcode loader](./img/shellcode_loader-msf.webp)
 
 #### basic command shell
 
@@ -217,6 +241,12 @@ map any target addresses to CC side, using HTTP2 (or whatever transport your age
 
 ![port_fwd.png](./img/port_fwd.png.webp)
 
+#### reverse port mapping (interoperability with other frameworks)
+
+this screenshot shows a [meterpreter](https://www.offensive-security.com/metasploit-unleashed/meterpreter-basics/) session established with the help of `emp3r0r`
+
+![reverse port mapping](./img/reverse_portfwd.webp)
+
 #### plugin system
 
 yes, there is a plugin system. please read the [wiki](https://github.com/jm33-m0/emp3r0r/wiki/Plugins) for more information
@@ -229,6 +259,7 @@ yes, there is a plugin system. please read the [wiki](https://github.com/jm33-m0
 
 - [pty](https://github.com/creack/pty)
 - [guitmz](https://github.com/guitmz)
+- [sektor7](https://blog.sektor7.net/#!res/2018/pure-in-memory-linux.md)
 - [readline](https://github.com/bettercap/readline)
 - [h2conn](https://github.com/posener/h2conn)
 - [diamorphine](https://github.com/m0nad/Diamorphine)

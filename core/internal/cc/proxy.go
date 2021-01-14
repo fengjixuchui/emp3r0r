@@ -17,8 +17,8 @@ import (
 // PortFwdSession holds controller interface of a port-fwd session
 type PortFwdSession struct {
 	Lport       string // listen_port
-	To          string // to_port
-	Description string // fmt.Sprintf("%s (Local) -> %s (Agent)", listenPort, toPort)
+	To          string // to address
+	Description string // fmt.Sprintf("%s (Local) -> %s (Agent)", listenPort, to_addr)
 
 	Sh     map[string]*StreamHandler // related to HTTP handler
 	Ctx    context.Context           // PortFwd context
@@ -36,6 +36,78 @@ func ListPortFwds() {
 		}
 		color.Green("%s (%s)\n", portmap.Description, id)
 	}
+}
+
+// InitReversedPortFwd send portfwd command to agent and set up a reverse port mapping
+func (pf *PortFwdSession) InitReversedPortFwd() (err error) {
+	toAddr := pf.To
+	listenPort := pf.Lport
+
+	_, e2 := strconv.Atoi(listenPort)
+	if !tun.ValidateIPPort(toAddr) || e2 != nil {
+		return fmt.Errorf("Invalid address/port: %s (to), %v (listen_port)", toAddr, e2)
+	}
+
+	// mark this session, save to PortFwds
+	fwdID := uuid.New().String()
+	pf.Sh = nil
+	pf.Description = fmt.Sprintf("%s (Local) <- %s (Agent)", toAddr, listenPort)
+	PortFwds[fwdID] = pf
+
+	// tell agent to start this mapping
+	cmd := fmt.Sprintf("!port_fwd %s %s reverse", listenPort, fwdID)
+	err = SendCmd(cmd, CurrentTarget)
+	if err != nil {
+		CliPrintError("SendCmd: %v", err)
+		return
+	}
+	return
+}
+
+// RunReversedPortFwd expose service on CC side to agent, via h2conn
+// as if the service is listening on agent machine
+func (pf *PortFwdSession) RunReversedPortFwd(sh *StreamHandler) (err error) {
+	// dial dest
+	conn, err := net.Dial("tcp", pf.To)
+	if err != nil {
+		CliPrintWarning("RunReversedPortFwd failed to connect to %s: %v", pf.To, err)
+		return
+	}
+
+	// clean up all goroutines
+	cleanup := func() {
+		_, _ = conn.Write([]byte("exit\n"))
+		conn.Close()
+		sh.H2x.Conn.Close()
+		CliPrintInfo("PortFwd conn handler (%s) finished", conn.RemoteAddr().String())
+		sh.H2x.Cancel() // cancel this h2 connection
+	}
+
+	// io.Copy
+	go func() {
+		defer cleanup()
+		_, err = io.Copy(sh.H2x.Conn, conn)
+		if err != nil {
+			CliPrintWarning("conn -> h2: %v", err)
+			return
+		}
+	}()
+	go func() {
+		defer cleanup()
+		_, err = io.Copy(conn, sh.H2x.Conn)
+		if err != nil {
+			CliPrintWarning("h2 -> conn: %v", err)
+			return
+		}
+	}()
+
+	// keep running until context is canceled
+	defer cleanup()
+	for sh.H2x.Ctx.Err() == nil {
+		time.Sleep(500 * time.Millisecond)
+	}
+
+	return
 }
 
 // RunPortFwd forward from ccPort to dstPort on agent, via h2conn
@@ -116,7 +188,7 @@ func (pf *PortFwdSession) RunPortFwd() (err error) {
 	}
 
 	fwdID := uuid.New().String()
-	cmd := fmt.Sprintf("!port_fwd %s %s", toAddr, fwdID)
+	cmd := fmt.Sprintf("!port_fwd %s %s on", toAddr, fwdID)
 	err = SendCmd(cmd, CurrentTarget)
 	if err != nil {
 		CliPrintError("SendCmd: %v", err)
@@ -169,7 +241,7 @@ func (pf *PortFwdSession) RunPortFwd() (err error) {
 		go func() {
 			// sub-session (streamHandler) ID
 			shID := fmt.Sprintf("%s_%d", fwdID, agent.RandInt(0, 1024))
-			cmd = fmt.Sprintf("!port_fwd %s %s", toAddr, shID)
+			cmd = fmt.Sprintf("!port_fwd %s %s on", toAddr, shID)
 			err = SendCmd(cmd, CurrentTarget)
 			if err != nil {
 				CliPrintError("SendCmd: %v", err)

