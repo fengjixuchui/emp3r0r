@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"os"
 )
 
 // AESEncryptRaw encrypt bytes
@@ -129,6 +130,22 @@ func MD5Sum(text string) string {
 func SHA256Sum(text string) string {
 	sumbytes := sha256.Sum256([]byte(text))
 	return fmt.Sprintf("%x", sumbytes)
+}
+
+// SHA256SumFile calc sha256 of a file (of any size)
+func SHA256SumFile(path string) string {
+	f, err := os.Open(path)
+	if err != nil {
+		return err.Error()
+	}
+	defer f.Close()
+
+	h := sha256.New()
+	if _, err := io.Copy(h, f); err != nil {
+		return err.Error()
+	}
+
+	return fmt.Sprintf("%x", h.Sum(nil))
 }
 
 func SHA256SumRaw(data []byte) string {

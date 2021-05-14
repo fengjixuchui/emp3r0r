@@ -3,14 +3,16 @@ linux post-exploitation framework made by linux user
 
 **Still under active development**
 
-![logo](./img/emp3r0r.png)
-
 - [中文介绍](https://www.freebuf.com/sectool/259079.html)
 - [check my blog for updates](https://jm33.me/emp3r0r-0x00.html)
 - [how to use](https://github.com/jm33-m0/emp3r0r/wiki)
 - **collaborators wanted!!!** please [contact me](https://jm33.me/pages/got-something-to-say.html) if you are interested
 - **cross-platform** support is in progress, contribute if you want emp3r0r to run on other systems
+- **Windows** is officially supported with core features enabled, but it **won't** be open sourced. however, you can **port emp3r0r to any platforms** that golang supports, with the codebase provided here, ask any questions in [this thread](https://github.com/jm33-m0/emp3r0r/discussions/24)
 
+![logo](./img/emp3r0r.png)
+
+![reverse_proxy](./img/reverse_proxy.png)
 ____
 
 ## table of contents
@@ -31,6 +33,7 @@ ____
         * [hide processes and files](#hide-processes-and-files)
         * [persistence](#persistence)
     * [modules](#modules)
+        * [reverse proxy](#reverse-proxy)
         * [shellcode injection](#shellcode-injection)
         * [shellcode loader](#shellcode-loader)
         * [basic command shell](#basic-command-shell)
@@ -57,8 +60,9 @@ ____
 - [x] injector: inject shellcode into arbitrary process, using go and ptrace syscall
 - [x] injector: recover process after injection
 - [x] persistence: inject guardian shellcode into arbitrary process to gain persistence
-- [ ] **headless CC**, control using existing commands, can be useful when we write a web-based GUI
-- [ ] **exploit kit**
+- [x] **headless CC**, control using existing commands, can be useful when we write a web-based GUI
+- [x] screenshot, supports both windows and linux
+- [x] reverse proxy
 - [ ] network scanner
 - [ ] passive scanner, for host/service discovery
 - [ ] password spray
@@ -98,9 +102,11 @@ i hope this tool helps you, and i will add features to it as i learn new things
 * file management
 * log cleaner
 * **stealth** connection
+* screenshot
 * anti-antivirus
 * internet access checker
 * **autoproxy** for semi-isolated networks
+* **reverse proxy** to bring every host online
 * all of these in one **HTTP2** connection
 * can be encapsulated in any external proxies such as **TOR**, and **CDNs**
 * interoperability with **metasploit / Cobalt Strike**
@@ -187,6 +193,18 @@ more will be added in the future
 
 ### modules
 
+#### reverse proxy
+
+think it as `ssh -R`, when autoproxy module doesn't work because of the **firewall** on the agent that provides proxy service, what can you do?
+
+in normal circumstances, we would use `ssh -R` to map our client-side port to the ssh server, so the server can connect to us to share our internet connection.
+
+thats exactly what emp3r0r does, except it doesn't require any openssh binaries to be installed, type `use reverse_proxy` to get started!
+
+with this feature you can bring **every host that you can reach** to emp3r0r CC server.
+
+![reverse_proxy](./img/reverse_proxy.webp)
+
 #### shellcode injection
 
 inject guardian shellcode into arbitrary process, to gain persistence
@@ -224,6 +242,10 @@ emp3r0r's terminal supports **everything your current terminal supports**, you c
 but wait, it's more than just a reverse bash shell, with [module vaccine](https://github.com/jm33-m0/static-bins/tree/main/vaccine), you can use whatever tool you like on your target system
 
 ![bash](./img/bash.webp)
+
+you can also have it on Windows targets:
+
+![windows_rshell](./img/windows_rshell.webp)
 
 #### credential harvesting
 

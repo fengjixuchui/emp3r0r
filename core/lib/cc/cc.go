@@ -1,12 +1,9 @@
 package cc
 
 import (
-	"crypto/sha256"
-	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"strings"
 
@@ -21,8 +18,8 @@ var (
 	// 0 (INFO) -> 1 (WARN) -> 2 (ERROR)
 	DebugLevel = 0
 
-	// IsHeadless Indicate whether we are in headless mode
-	IsHeadless = false
+	// IsAPIEnabled Indicate whether we are in headless mode
+	IsAPIEnabled = false
 
 	// EmpRoot root directory of emp3r0r
 	EmpRoot, _ = os.Getwd()
@@ -39,7 +36,7 @@ const (
 	WWWRoot = Temp + tun.FileAPI
 
 	// FileGetDir where we save #get files
-	FileGetDir = Temp + "file-get/"
+	FileGetDir = "file-get/"
 )
 
 // Control controller interface of a target
@@ -74,11 +71,10 @@ func headlessListTargets() (err error) {
 // ListTargets list currently connected agents
 func ListTargets() {
 	// return JSON data to APIConn in headless mode
-	if IsHeadless {
+	if IsAPIEnabled {
 		if err := headlessListTargets(); err != nil {
 			CliPrintError("ls_targets: %v", err)
 		}
-		return
 	}
 
 	color.Cyan("Connected agents\n")
@@ -143,7 +139,7 @@ func ListTargets() {
 
 		// print
 		fmt.Printf(" [%s] Tag: %s", color.CyanString("%d", control.Index), strings.Repeat(" ", (14-len("Tag")))+
-			color.CyanString(target.Tag))
+			color.CyanString(splitLongLine(target.Tag, 3)))
 
 		for key, val := range infoMap {
 			fmt.Printf("\n%s%s:%s%s", indent, key, strings.Repeat(" ", (15-len(key))), val)
@@ -189,69 +185,4 @@ func Send2Agent(data *agent.MsgTunData, agent *agent.SystemInfo) (err error) {
 
 	err = out.Encode(data)
 	return
-}
-
-// PutFile put file to agent
-func PutFile(lpath, rpath string, a *agent.SystemInfo) error {
-	// open and read the target file
-	f, err := os.Open(lpath)
-	if err != nil {
-		CliPrintError("PutFile: %v", err)
-		return err
-	}
-	bytes, err := ioutil.ReadAll(f)
-	if err != nil {
-		CliPrintError("PutFile: %v", err)
-		return err
-	}
-
-	// file sha256sum
-	sum := sha256.Sum256(bytes)
-
-	// file size
-	size := len(bytes)
-	sizemB := float32(size) / 1024 / 1024
-	if sizemB > 20 {
-		return errors.New("please do NOT transfer large files this way as it's too NOISY, aborting")
-	}
-	CliPrintInfo("\nPutFile:\nUploading '%s' to\n'%s' "+
-		"on %s, agent [%d]\n"+
-		"size: %d bytes (%.2fmB)\n"+
-		"sha256sum: %x",
-		lpath, rpath,
-		a.IP, Targets[a].Index,
-		size, sizemB,
-		sum,
-	)
-
-	// base64 encode
-	payload := base64.StdEncoding.EncodeToString(bytes)
-
-	fileData := agent.MsgTunData{
-		Payload: "FILE" + agent.OpSep + rpath + agent.OpSep + payload,
-		Tag:     a.Tag,
-	}
-
-	// send
-	err = Send2Agent(&fileData, a)
-	if err != nil {
-		CliPrintError("PutFile: %v", err)
-		return err
-	}
-	return nil
-}
-
-// GetFile get file from agent
-func GetFile(filepath string, a *agent.SystemInfo) error {
-	var data agent.MsgTunData
-	cmd := fmt.Sprintf("#get %s", filepath)
-
-	data.Payload = fmt.Sprintf("cmd%s%s", agent.OpSep, cmd)
-	data.Tag = a.Tag
-	err := Send2Agent(&data, a)
-	if err != nil {
-		CliPrintError("GetFile: %v", err)
-		return err
-	}
-	return nil
 }

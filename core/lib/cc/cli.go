@@ -17,6 +17,8 @@ import (
 	"github.com/jm33-m0/emp3r0r/core/lib/agent"
 )
 
+const PromptName = "emp3r0r"
+
 var (
 	// CliCompleter holds all command completions
 	CliCompleter = readline.NewPrefixCompleter()
@@ -28,7 +30,7 @@ var (
 	EmpReadLine *readline.Instance
 
 	// EmpPrompt : the prompt string
-	EmpPrompt = color.HiCyanString("emp3r0r > ")
+	EmpPrompt = color.HiCyanString(PromptName + " > ")
 
 	err error
 )
@@ -49,6 +51,9 @@ func CliMain() {
 
 		readline.PcItem("target",
 			readline.PcItemDynamic(listTargetIndexTags())),
+
+		readline.PcItem("delete_port_fwd",
+			readline.PcItemDynamic(listPortMappings())),
 	}
 
 	for cmd := range Commands {
@@ -133,29 +138,27 @@ start:
 
 // SetDynamicPrompt set prompt with module and target info
 func SetDynamicPrompt() {
-	if !IsHeadless {
-		shortName := "local" // if no target is selected
-		if CurrentTarget != nil {
-			shortName = strings.Split(CurrentTarget.Tag, "-agent")[0]
-		}
-		if CurrentMod == "<blank>" {
-			CurrentMod = "none" // if no module is selected
-		}
-		dynamicPrompt := fmt.Sprintf("%s @%s (%s) "+color.HiCyanString("> "),
-			color.HiCyanString("emp3r0r"),
-			color.CyanString(shortName),
-			color.HiBlueString(CurrentMod),
-		)
-		EmpReadLine.Config.Prompt = dynamicPrompt
-		EmpReadLine.SetPrompt(dynamicPrompt)
+	shortName := "local" // if no target is selected
+	if CurrentTarget != nil {
+		shortName = strings.Split(CurrentTarget.Tag, "-agent")[0]
 	}
+	if CurrentMod == "<blank>" {
+		CurrentMod = "none" // if no module is selected
+	}
+	dynamicPrompt := fmt.Sprintf("%s @%s (%s) "+color.HiCyanString("> "),
+		color.HiCyanString(PromptName),
+		color.CyanString(shortName),
+		color.HiBlueString(CurrentMod),
+	)
+	EmpReadLine.Config.Prompt = dynamicPrompt
+	EmpReadLine.SetPrompt(dynamicPrompt)
 }
 
 // CliPrintInfo print log in blue
 func CliPrintInfo(format string, a ...interface{}) {
 	if DebugLevel == 0 {
 		log.Println(color.BlueString(format, a...))
-		if IsHeadless {
+		if IsAPIEnabled {
 			// send to socket
 			var resp APIResponse
 			msg := GetDateTime() + " INFO: " + fmt.Sprintf(format, a...)
@@ -179,7 +182,7 @@ func CliPrintInfo(format string, a ...interface{}) {
 func CliPrintWarning(format string, a ...interface{}) {
 	if DebugLevel <= 1 {
 		log.Println(color.YellowString(format, a...))
-		if IsHeadless {
+		if IsAPIEnabled {
 			// send to socket
 			var resp APIResponse
 			msg := GetDateTime() + " WARN: " + fmt.Sprintf(format, a...)
@@ -202,7 +205,7 @@ func CliPrintWarning(format string, a ...interface{}) {
 // CliPrintSuccess print log in green
 func CliPrintSuccess(format string, a ...interface{}) {
 	log.Println(color.HiGreenString(format, a...))
-	if IsHeadless {
+	if IsAPIEnabled {
 		// send to socket
 		var resp APIResponse
 		msg := GetDateTime() + " SUCCESS: " + fmt.Sprintf(format, a...)
@@ -224,7 +227,7 @@ func CliPrintSuccess(format string, a ...interface{}) {
 // CliPrintError print log in red
 func CliPrintError(format string, a ...interface{}) {
 	log.Println(color.HiRedString(format, a...))
-	if IsHeadless {
+	if IsAPIEnabled {
 		// send to socket
 		var resp APIResponse
 		msg := GetDateTime() + " ERROR: " + fmt.Sprintf(format, a...)
@@ -246,7 +249,7 @@ func CliPrintError(format string, a ...interface{}) {
 // CliYesNo prompt for a y/n answer from user
 func CliYesNo(prompt string) bool {
 	// always return true if there's no way to show prompt
-	if IsHeadless {
+	if IsAPIEnabled {
 		return true
 	}
 
@@ -313,13 +316,12 @@ func CliBanner() error {
 
 // CliPrettyPrint prints two-column help info
 func CliPrettyPrint(header1, header2 string, map2write *map[string]string) {
-	if IsHeadless {
+	if IsAPIEnabled {
 		// send to socket
 		var resp APIResponse
 		msg, err := json.Marshal(map2write)
 		if err != nil {
 			log.Printf("CliPrettyPrint: %v", err)
-			return
 		}
 		resp.MsgData = msg
 		resp.Alert = false
@@ -327,13 +329,11 @@ func CliPrettyPrint(header1, header2 string, map2write *map[string]string) {
 		data, err := json.Marshal(resp)
 		if err != nil {
 			log.Printf("CliPrettyPrint: %v", err)
-			return
 		}
 		_, err = APIConn.Write([]byte(data))
 		if err != nil {
 			log.Printf("CliPrettyPrint: %v", err)
 		}
-		return
 	}
 
 	cnt := 10
@@ -344,7 +344,7 @@ func CliPrettyPrint(header1, header2 string, map2write *map[string]string) {
 	fmt.Println("")
 
 	for c1, c2 := range *map2write {
-		cnt = len(header1) + 10 - len(c1)
+		cnt = len(header1) + 18 - len(c1) // NOTE cannot be too long or cnt can be negative
 		sep = strings.Repeat(" ", cnt)
 		color.Cyan("%s%s%s\n", c1, sep, c2)
 	}
@@ -402,6 +402,17 @@ func listMods() func(string) []string {
 			names = append(names, mod)
 		}
 		return names
+	}
+}
+
+// autocomplete portfwd session IDs
+func listPortMappings() func(string) []string {
+	return func(line string) []string {
+		ids := make([]string, 0)
+		for id := range PortFwds {
+			ids = append(ids, id)
+		}
+		return ids
 	}
 }
 

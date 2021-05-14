@@ -60,12 +60,17 @@ class GoBuild:
         '''
         self.gen_certs()
         # CA
-        f = open("./tls/rootCA.crt")
-        self.CA = f.read()
-        f.close()
+        if 'ca' in CACHED_CONF:
+            log_warn(
+                f"Using cached CA cert ({CACHED_CONF['ca']}),\nmake sure you have the coresponding keypair signed by it")
+            self.CA = CACHED_CONF['ca']
+        else:
+            f = open("./tls/rootCA.crt")
+            self.CA = f.read()
+            f.close()
 
-        # cache CA, too
-        CACHED_CONF['ca'] = self.CA
+            # cache CA, too
+            CACHED_CONF['ca'] = self.CA
 
         # cache version
         CACHED_CONF['version'] = self.VERSION
@@ -77,9 +82,12 @@ class GoBuild:
 
         self.set_tags()
 
-        for f in glob.glob("./tls/emp3r0r-*pem"):
-            print(f" Copy {f} to ./build")
-            shutil.copy(f, "./build")
+        # copy the server/cc keypair to ./build for later use
+        if os.path.isdir("./tls"):
+            log_warn("[*] Copying CC keypair to ./build")
+            for f in glob.glob("./tls/emp3r0r-*pem"):
+                print(f" Copy {f} to ./build")
+                shutil.copy(f, "./build")
 
         try:
             os.chdir(f"./cmd/{self.target}")
@@ -102,8 +110,12 @@ class GoBuild:
         os.chdir("../../")
         self.unset_tags()
 
-        if os.path.exists(f"./build/{build_target.split('/')[-1]}"):
-            os.system(f"upx -9 ./build/{build_target.split('/')[-1]}")
+        targetFile = f"./build/{build_target.split('/')[-1]}"
+        if os.path.exists(targetFile):
+            if not targetFile.endswith("/cc"):
+                os.system(f"upx -9 {targetFile}")
+            else:
+                log_warn(f"{targetFile} generated")
         else:
             log_error("go build failed")
             sys.exit(1)

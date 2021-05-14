@@ -16,6 +16,9 @@ const (
 	// ProxyAPI proxy interface
 	ProxyAPI = WebRoot + "/proxy"
 
+	// FTPAPI file transfer
+	FTPAPI = WebRoot + "/ftp"
+
 	// FileAPI host some files
 	FileAPI = "/www/"
 )

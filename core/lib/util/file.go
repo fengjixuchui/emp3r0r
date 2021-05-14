@@ -25,6 +25,14 @@ type Dentry struct {
 	Permission string `json:"perm"`  // -rwxr-xr-x
 }
 
+// FileStat stat info of a file
+type FileStat struct {
+	Name       string `json:"name"`
+	Permission string `json:"permission"`
+	Checksum   string `json:"checksum"`
+	Size       int64  `json:"size"`
+}
+
 // LsPath ls path and return a json
 func LsPath(path string) (res string, err error) {
 	files, err := ioutil.ReadDir("./")
@@ -141,5 +149,34 @@ func FileBaseName(filepath string) (filename string) {
 	// we only need the filename
 	filepathSplit := strings.Split(filepath, "/")
 	filename = filepathSplit[len(filepathSplit)-1]
+	return
+}
+
+// FileAllocate allocate n bytes for a file, will delete the target file if already exists
+func FileAllocate(filepath string, n int64) (err error) {
+	if IsFileExist(filepath) {
+		err = os.Remove(filepath)
+		if err != nil {
+			return
+		}
+	}
+	f, err := os.Create(filepath)
+	if err != nil {
+		return
+	}
+	defer f.Close()
+	f.Truncate(n)
+
+	return
+}
+
+// FileSize calc file size
+func FileSize(path string) (size int64) {
+	fi, err := os.Stat(path)
+	if err != nil {
+		log.Printf("FileSize %s: %v", path, err)
+		return -1
+	}
+	size = fi.Size()
 	return
 }

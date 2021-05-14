@@ -9,6 +9,7 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/fatih/color"
@@ -17,6 +18,12 @@ import (
 	"github.com/jm33-m0/emp3r0r/core/lib/util"
 	"github.com/olekukonko/tablewriter"
 )
+
+// CmdResults receive response from agent and cache them
+var CmdResults = make(map[string]string)
+
+// mutex
+var CmdResultsMutex = &sync.Mutex{}
 
 // processAgentData deal with data from agent side
 func processAgentData(data *agent.MsgTunData) {
@@ -35,7 +42,7 @@ func processAgentData(data *agent.MsgTunData) {
 		outLines := strings.Split(out, "\n")
 
 		// headless mode
-		if IsHeadless {
+		if IsAPIEnabled {
 			// send to socket
 			var resp APIResponse
 			msg := fmt.Sprintf("%s:\n%s", cmd, out)
@@ -173,6 +180,10 @@ func processAgentData(data *agent.MsgTunData) {
 		}
 
 		log.Printf("\n[%s] %s:\n%s\n\n", color.CyanString("%d", contrlIf.Index), color.HiMagentaString(cmd), color.HiWhiteString(out))
+		// cache this cmd response
+		CmdResultsMutex.Lock()
+		CmdResults[cmd] = out
+		CmdResultsMutex.Unlock()
 
 	// save file from #get
 	case "FILE":
@@ -187,33 +198,44 @@ func processAgentData(data *agent.MsgTunData) {
 			CliPrintError("processAgentData failed to decode file data: %v", err)
 			return
 		}
-		temp := FileGetDir + filename + ".emp3r0r"
+		filewrite := FileGetDir + filename + ".downloading" // we will write to this file
+		targetFile := FileGetDir + filename                 // will copy the downloaded file here
+		targetSize := util.FileSize(targetFile)             // check if we reach this size
+		f, err := os.OpenFile(filewrite, os.O_APPEND|os.O_WRONLY|os.O_CREATE, 0600)
+		if err != nil {
+			CliPrintError("processAgentData write file: %v", err)
+		}
+		defer f.Close()
 
-		defer func() {
-			// clean up temp file
-			_ = os.Remove(temp)
-		}()
-
-		// save to /tmp for security
-		if _, err := os.Stat(FileGetDir); os.IsNotExist(err) {
+		// save to FileGetDir
+		if !util.IsFileExist(FileGetDir) {
 			err = os.MkdirAll(FileGetDir, 0700)
 			if err != nil {
-				CliPrintError("mkdir -p /tmp/emp3r0r/file-get: %v", err)
+				CliPrintError("mkdir -p %s: %v", FileGetDir, err)
 				return
 			}
 		}
-		err = ioutil.WriteFile(temp, []byte("downloading"), 0600)
-		if err != nil {
-			CliPrintWarning("%v", err)
-		}
-		err = ioutil.WriteFile(FileGetDir+filename, filedata, 0600)
+		_, err = f.Write(filedata)
 		if err != nil {
 			CliPrintError("processAgentData failed to save file: %v", err)
 			return
 		}
-		size := float32(len(filedata)) / 1024
-		sha256sum := tun.SHA256SumRaw(filedata)
-		CliPrintWarning("Downloaded %fKB to %s%s (%s)", size, FileGetDir, filename, sha256sum)
+		downloadedSize := float32(len(filedata)) / 1024
+		sha256sumFile := tun.SHA256SumFile(filewrite)
+		sha256sumPart := tun.SHA256SumRaw(filedata)
+		CliPrintInfo("Downloaded %fKB (%s) to %s, sha256sum of downloaded file is %s", downloadedSize, sha256sumPart, filewrite, sha256sumFile)
+
+		// have we finished downloading?
+		nowSize := util.FileSize(filewrite)
+		if nowSize == targetSize {
+			err = os.Rename(filewrite, targetFile)
+			if err != nil {
+				CliPrintError("Failed to save downloaded file %s: %v", targetFile, err)
+			}
+			CliPrintSuccess("Downloaded %d bytes to %s", nowSize, targetFile)
+			return
+		}
+		CliPrintWarning("Incomplete download (%d of %d bytes), will continue if you run GET again", nowSize, targetSize)
 
 	default:
 	}
