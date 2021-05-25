@@ -73,6 +73,7 @@ func DownloadViaCC(url, path string) (data []byte, err error) {
 	// return our http client
 	tr := &http.Transport{TLSClientConfig: config}
 	client := grab.NewClient()
+	client.HTTPClient.Timeout = time.Duration(10) * time.Second
 	client.HTTPClient.Transport = tr // use our TLS transport
 
 	req, err := grab.NewRequest(path, url)
@@ -85,12 +86,26 @@ func DownloadViaCC(url, path string) (data []byte, err error) {
 		data, err = ioutil.ReadFile(path)
 		return
 	}
-	for resp.Progress() < 1 {
-		log.Printf("%f %% downloaded\n", resp.Progress()*100)
-		time.Sleep(time.Second)
+
+	// progress
+	t := time.NewTicker(time.Second)
+	defer t.Stop()
+	for !resp.IsComplete() {
+		select {
+		case <-resp.Done:
+			err = resp.Err()
+			if err != nil {
+				err = fmt.Errorf("DownloadViaCC finished with error: %v", err)
+				log.Print(err)
+				return
+			}
+			log.Printf("DownloadViaCC: saved %s to %s (%d bytes)", url, path, resp.Size)
+			return
+		case <-t.C:
+			log.Printf("%.02f%% complete\n", resp.Progress()*100)
+		}
 	}
 
-	log.Printf("DownloadViaCC: saved %s to %s (%d bytes)", url, path, resp.Size)
 	return
 }
 
@@ -103,6 +118,8 @@ func sendFile2CC(filepath string, offset int64, token string) (checksum string, 
 		err = fmt.Errorf("sendFile2CC: failed to open %s: %v", filepath, err)
 		return
 	}
+	defer f.Close()
+
 	// seek offset
 	_, err = f.Seek(offset, 0)
 	if err != nil {
@@ -146,7 +163,7 @@ func sendFile2CC(filepath string, offset int64, token string) (checksum string, 
 		if err != nil {
 			return
 		}
-		buf = buf[:]
+		log.Printf("Sending remaining %d bytes", len(buf))
 	}
 
 	// checksum

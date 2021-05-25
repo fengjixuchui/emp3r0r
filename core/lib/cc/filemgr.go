@@ -4,16 +4,35 @@ import (
 	"strings"
 )
 
+// LsDir cache items in current directory
+var LsDir []string
+
 func SingleArgCmd(cmd string) {
 	inputSlice := strings.Fields(cmd)
 	cmdname := inputSlice[0]
-	if len(inputSlice) != 2 {
+	if len(inputSlice) < 2 {
 		CliPrintError("%s requires one argument", cmdname)
 		return
 	}
 	if cmdname == "kill" {
 		inputSlice[0] = "#kill"
 		cmd = strings.Join(inputSlice, " ")
+	}
+
+	// send cmd
+	err := SendCmdToCurrentTarget(cmd)
+	if err != nil {
+		CliPrintError("%s failed: %v", cmdname, err)
+		return
+	}
+}
+
+func DoubleArgCmd(cmd string) {
+	inputSlice := strings.Fields(cmd)
+	cmdname := inputSlice[0]
+	if len(inputSlice) < 3 {
+		CliPrintError("%s requires two arguments", cmdname)
+		return
 	}
 
 	// send cmd

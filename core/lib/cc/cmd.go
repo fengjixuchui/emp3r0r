@@ -5,7 +5,9 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/fatih/color"
 	"github.com/jm33-m0/emp3r0r/core/lib/agent"
+	"github.com/jm33-m0/emp3r0r/core/lib/util"
 )
 
 // Commands holds all commands and their help string, command: help
@@ -18,12 +20,16 @@ var Commands = map[string]string{
 	"info":            "What options do we have?",
 	"gen_agent":       "Generate agent with provided binary and build.json",
 	"ls":              "List current directory of selected agent",
+	"mv":              "Move a file to another location on selected target",
+	"cp":              "Copy a file to another location on selected target",
 	"cd":              "Change current working directory of selected agent",
 	"rm":              "Delete a file/directory on selected agent",
+	"mkdir":           "Create new directory on selected agent",
 	"pwd":             "Current working directory of selected agent",
 	"ps":              "Process list of selected agent",
 	"kill":            "Terminate a process on selected agent: eg. `kill <pid>`",
 	"get":             "Download a file from selected agent",
+	"vim":             "Edit a text file on selected agent",
 	"put":             "Upload a file to selected agent",
 	"screenshot":      "Take a screenshot of selected agent",
 	"ls_targets":      "List all targets",
@@ -46,14 +52,17 @@ var CmdHelpers = map[string]func(){
 
 // FileManagerHelpers manage agent files
 var FileManagerHelpers = map[string]func(string){
-	"ls":   NoArgCmd,
-	"pwd":  NoArgCmd,
-	"cd":   SingleArgCmd,
-	"rm":   SingleArgCmd,
-	"put":  UploadToAgent,
-	"get":  DownloadFromAgent,
-	"ps":   NoArgCmd,
-	"kill": SingleArgCmd,
+	"ls":    NoArgCmd,
+	"pwd":   NoArgCmd,
+	"cd":    SingleArgCmd,
+	"mv":    DoubleArgCmd,
+	"cp":    DoubleArgCmd,
+	"rm":    SingleArgCmd,
+	"mkdir": SingleArgCmd,
+	"put":   UploadToAgent,
+	"get":   DownloadFromAgent,
+	"ps":    NoArgCmd,
+	"kill":  SingleArgCmd,
 }
 
 const HELP = "help" // fuck goconst
@@ -114,6 +123,34 @@ func CmdHandler(cmd string) (err error) {
 		}
 		DeletePortFwdSession(cmdSplit[1])
 
+	case cmdSplit[0] == "label":
+		if len(cmdSplit) < 2 {
+			CliPrintError("Invalid command %s, usage: 'label <target tag/index> <label>'", strconv.Quote(cmd))
+			return
+		}
+		index, e := strconv.Atoi(cmdSplit[1])
+		label := strings.Join(cmdSplit[2:], " ")
+
+		var target *agent.SystemInfo
+		if e != nil {
+			target = GetTargetFromTag(cmdSplit[1])
+			if target != nil {
+				Targets[target].Label = label // set label
+				labelAgents()
+				CliPrintSuccess("%s has been labeled as %s", target.Tag, label)
+				return nil
+			}
+			return fmt.Errorf("cannot set target label by index: %v", e)
+		}
+		target = GetTargetFromIndex(index)
+		if target == nil {
+			CliPrintWarning("Target does not exist")
+			return fmt.Errorf("target not set or is nil")
+		}
+		Targets[target].Label = label // set label
+		labelAgents()
+		CliPrintSuccess("%s has been labeled as %s", target.Tag, label)
+
 	case cmdSplit[0] == "target":
 		if len(cmdSplit) != 2 {
 			CliPrintError("set target to what? " + strconv.Quote(cmd))
@@ -125,6 +162,7 @@ func CmdHandler(cmd string) (err error) {
 		if e != nil {
 			CurrentTarget = GetTargetFromTag(cmdSplit[1])
 			if CurrentTarget != nil {
+				GetTargetDetails(CurrentTarget)
 				CliPrintSuccess("Now targeting %s", CurrentTarget.Tag)
 				return nil
 			}
@@ -135,14 +173,47 @@ func CmdHandler(cmd string) (err error) {
 			CliPrintWarning("Target does not exist, no target has been selected")
 			return fmt.Errorf("target not set or is nil")
 		}
+
+		GetTargetDetails(CurrentTarget)
 		CliPrintSuccess("Now targeting %s", CurrentTarget.Tag)
+
+	case cmdSplit[0] == "vim":
+
+		if len(cmdSplit) < 2 {
+			CliPrintError("What file do you want to edit?")
+			return
+		}
+		filepath := strings.Join(cmdSplit[1:], " ")
+		filename := util.FileBaseName(filepath)
+
+		// tell user what to do
+		color.HiBlue("[*] Now edit %s in vim window",
+			filepath)
+
+		// edit remote files
+		if GetFile(filepath, CurrentTarget) != nil {
+			CliPrintError("Cannot download %s", filepath)
+			return
+		}
+
+		if err = VimEdit(FileGetDir + filename); err != nil {
+			CliPrintError("VimEdit: %v", err)
+			return
+		} // wait until vim exits
+
+		// upload the new file to target
+		if PutFile(FileGetDir+filename, filepath, CurrentTarget) != nil {
+			CliPrintError("Cannot upload %s", filepath)
+			return
+		}
 
 	default:
 		helper := CmdHelpers[cmd]
 		if helper == nil {
 			filehelper := FileManagerHelpers[cmdSplit[0]]
 			if filehelper == nil {
-				CliPrintError("Unknown command: " + strconv.Quote(cmd))
+				CliPrintWarning("Exec: " + strconv.Quote(cmd))
+				SendCmdToCurrentTarget(cmd)
 				return
 			}
 			filehelper(cmd)

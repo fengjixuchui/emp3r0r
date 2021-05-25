@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
-	"sync"
 	"time"
 
 	"github.com/google/uuid"
@@ -63,16 +62,11 @@ func PutFile(lpath, rpath string, a *agent.SystemInfo) error {
 	)
 
 	// move file to wwwroot, then move it back when we are done with it
-	err := os.Rename(lpath, WWWRoot+util.FileBaseName(lpath))
+	CliPrintInfo("Copy %s to %s", lpath, WWWRoot+util.FileBaseName(lpath))
+	err := util.Copy(lpath, WWWRoot+util.FileBaseName(lpath))
 	if err != nil {
-		return fmt.Errorf("Move %s to %s: %v", lpath, WWWRoot+util.FileBaseName(lpath), err)
+		return fmt.Errorf("Copy %s to %s: %v", lpath, WWWRoot+util.FileBaseName(lpath), err)
 	}
-	defer func() {
-		err := os.Rename(WWWRoot+util.FileBaseName(lpath), lpath)
-		if err != nil {
-			CliPrintWarning("Move %s to %s: %v", WWWRoot+util.FileBaseName(lpath), lpath, err)
-		}
-	}()
 
 	// send cmd
 	cmd := fmt.Sprintf("put %s %s %d", lpath, rpath, size)
@@ -96,6 +90,12 @@ func GetFile(filepath string, a *agent.SystemInfo) error {
 	var data agent.MsgTunData
 	filename := FileGetDir + util.FileBaseName(filepath) // will copy the downloaded file here when we are done
 	tempname := filename + ".downloading"                // will be writing to this file
+	lock := filename + ".lock"                           // don't try to duplicate the task
+
+	// is this file already being downloaded?
+	if util.IsFileExist(lock) {
+		return fmt.Errorf("%s is already being downloaded", filename)
+	}
 
 	// stat target file, know its size, and allocate the file on disk
 	fi, err := StatFile(filepath, a)
@@ -121,12 +121,11 @@ func GetFile(filepath string, a *agent.SystemInfo) error {
 	ftpSh := &StreamHandler{}
 	// tell agent where to seek the left bytes
 	ftpSh.Token = uuid.NewString()
-	ftpSh.Mutex = &sync.Mutex{}
 	ftpSh.Buf = make(chan []byte)
 	ftpSh.BufSize = 1024 * 8
-	ftpSh.Mutex.Lock()
+	FTPMutex.Lock()
 	FTPStreams[filepath] = ftpSh
-	ftpSh.Mutex.Unlock()
+	FTPMutex.Unlock()
 
 	// h2x
 	ftpSh.H2x = new(agent.H2Conn)
@@ -140,5 +139,6 @@ func GetFile(filepath string, a *agent.SystemInfo) error {
 		CliPrintError("GetFile send command: %v", err)
 		return err
 	}
-	return nil
+
+	return err
 }

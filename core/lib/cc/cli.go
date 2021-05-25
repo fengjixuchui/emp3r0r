@@ -46,10 +46,37 @@ func CliMain() {
 		readline.PcItem("use",
 			readline.PcItemDynamic(listMods())),
 
+		readline.PcItem("rm",
+			readline.PcItemDynamic(listDir())),
+
+		readline.PcItem("mv",
+			readline.PcItemDynamic(listDir())),
+
+		readline.PcItem("mkdir",
+			readline.PcItemDynamic(listDir())),
+
+		readline.PcItem("cp",
+			readline.PcItemDynamic(listDir())),
+
+		readline.PcItem("cd",
+			readline.PcItemDynamic(listDir())),
+
+		readline.PcItem("get",
+			readline.PcItemDynamic(listDir())),
+
+		readline.PcItem("vim",
+			readline.PcItemDynamic(listDir())),
+
+		readline.PcItem("put",
+			readline.PcItemDynamic(listFiles("./"))),
+
 		readline.PcItem(HELP,
 			readline.PcItemDynamic(listMods())),
 
 		readline.PcItem("target",
+			readline.PcItemDynamic(listTargetIndexTags())),
+
+		readline.PcItem("label",
 			readline.PcItemDynamic(listTargetIndexTags())),
 
 		readline.PcItem("delete_port_fwd",
@@ -59,7 +86,17 @@ func CliMain() {
 	for cmd := range Commands {
 		if cmd == "set" ||
 			cmd == "use" ||
+			cmd == "get" ||
+			cmd == "vim" ||
+			cmd == "put" ||
+			cmd == "cp" ||
+			cmd == "mkdir" ||
 			cmd == "target" ||
+			cmd == "label" ||
+			cmd == "delete_port_fwd" ||
+			cmd == "rm" ||
+			cmd == "mv" ||
+			cmd == "cd" ||
 			cmd == HELP {
 			continue
 		}
@@ -336,7 +373,7 @@ func CliPrettyPrint(header1, header2 string, map2write *map[string]string) {
 		}
 	}
 
-	cnt := 10
+	cnt := 18
 	sep := strings.Repeat(" ", cnt)
 	color.Cyan("%s%s%s\n", header1, sep, header2)
 
@@ -374,6 +411,9 @@ func listValChoices() func(string) []string {
 		switch CurrentMod {
 		case agent.ModCMD_EXEC:
 			return Options["cmd_to_exec"].Vals
+		case agent.ModSHELL:
+			ret := append(Options["shell"].Vals, Options["port"].Vals...)
+			return ret
 		case agent.ModCLEAN_LOG:
 			return Options["keyword"].Vals
 		case agent.ModLPE_SUGGEST:
@@ -437,6 +477,17 @@ func listOptions() func(string) []string {
 
 		for opt := range Options {
 			names = append(names, opt)
+		}
+		return names
+	}
+}
+
+// autocomplete items in current directory
+func listDir() func(string) []string {
+	return func(line string) []string {
+		names := make([]string, 0)
+		for _, name := range LsDir {
+			names = append(names, name)
 		}
 		return names
 	}

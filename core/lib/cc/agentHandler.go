@@ -92,6 +92,7 @@ func processAgentData(data *agent.MsgTunData) {
 			table := tablewriter.NewWriter(tableString)
 			table.SetHeader([]string{"Name", "PID", "PPID", "User"})
 			table.SetBorder(true)
+			table.SetRowLine(true)
 			table.SetAutoWrapText(true)
 
 			// color
@@ -124,11 +125,14 @@ func processAgentData(data *agent.MsgTunData) {
 				return
 			}
 
+			LsDir = nil // clear cache
+
 			// build table
 			tdata := [][]string{}
 			tableString := &strings.Builder{}
 			table := tablewriter.NewWriter(tableString)
 			table.SetHeader([]string{"Name", "Type", "Size", "Time", "Permission"})
+			table.SetRowLine(true)
 			table.SetBorder(true)
 
 			// color
@@ -147,6 +151,11 @@ func processAgentData(data *agent.MsgTunData) {
 			// fill table
 			for _, d := range dents {
 				tdata = append(tdata, []string{d.Name, d.Ftype, d.Size, d.Date, d.Permission})
+				if d.Ftype == "file" {
+					LsDir = append(LsDir, d.Name)
+				} else {
+					LsDir = append(LsDir, d.Name+"/")
+				}
 			}
 			table.AppendBulk(tdata)
 			table.Render()
