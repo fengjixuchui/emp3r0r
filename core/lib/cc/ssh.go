@@ -4,8 +4,9 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"os"
+	"os/exec"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/jm33-m0/emp3r0r/core/lib/util"
@@ -13,10 +14,8 @@ import (
 
 // SSHClient ssh to sshd server, with shell access in a new tmux window
 func SSHClient(shell, port string) (err error) {
-	if !util.IsCommandExist("ssh") ||
-		!util.IsCommandExist("tmux") ||
-		os.Getenv("TMUX") == "" {
-		err = fmt.Errorf("ssh and tmux must be installed, and emp3r0r must be run under tmux session")
+	if !util.IsCommandExist("ssh") {
+		err = fmt.Errorf("ssh must be installed")
 		return
 	}
 
@@ -35,9 +34,30 @@ func SSHClient(shell, port string) (err error) {
 	if !exists {
 		// start sshd server on target
 		cmd := fmt.Sprintf("!sshd %s %s", shell, port)
-		err = SendCmdToCurrentTarget(cmd)
-		if err != nil {
-			return
+		if shell != "bash" {
+			err = SendCmdToCurrentTarget(cmd)
+			if err != nil {
+				return
+			}
+			CliPrintInfo("Starting sshd (%s) on target %s", shell, strconv.Quote(CurrentTarget.Tag))
+
+			// wait until sshd is up
+			defer func() {
+				CmdResultsMutex.Lock()
+				delete(CmdResults, cmd)
+				CmdResultsMutex.Unlock()
+			}()
+			for {
+				time.Sleep(100 * time.Millisecond)
+				res, exists := CmdResults[cmd]
+				if !strings.Contains(res, "success") {
+					err = fmt.Errorf("Start sshd failed: %s", res)
+					return
+				}
+				if exists {
+					break
+				}
+			}
 		}
 
 		// set up port mapping for the ssh session
@@ -78,10 +98,21 @@ wait:
 	}
 
 	// let's do the ssh
-	sshCmd := fmt.Sprintf("ssh -p %s -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no 127.0.0.1", lport)
+	sshPath, err := exec.LookPath("ssh")
+	if err != nil {
+		CliPrintError("ssh not found, please install it first: %v", err)
+	}
+	sshCmd := fmt.Sprintf("%s -p %s -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no 127.0.0.1",
+		sshPath, lport)
 	CliPrintSuccess("Opening SSH session for %s in new window. "+
 		"If that fails, please execute command %s manaully",
 		CurrentTarget.Tag, strconv.Quote(sshCmd))
-	// return TmuxNewWindow(fmt.Sprintf("ssh-%s", CurrentTarget.Hostname), sshCmd)
-	return OpenInNewTerminalWindow(fmt.Sprintf("ssh-%s", CurrentTarget.Hostname), sshCmd)
+
+	// agent name
+	name := CurrentTarget.Hostname
+	label := Targets[CurrentTarget].Label
+	if label != "nolabel" {
+		name = label
+	}
+	return TmuxNewWindow(fmt.Sprintf("%s-%s", name, shell), sshCmd)
 }

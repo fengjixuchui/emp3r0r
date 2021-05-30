@@ -81,7 +81,7 @@ class GoBuild:
 
         # write cache
         json_file = open(BUILD_JSON, "w+")
-        json.dump(CACHED_CONF, json_file)
+        json.dump(CACHED_CONF, json_file, indent=4)
         json_file.close()
 
         self.set_tags()
@@ -151,37 +151,67 @@ class GoBuild:
         restore tags in the source
         '''
         # version
-        unsed("./lib/agent/def.go",
+        unsed("./lib/data/def.go",
               "Version = \"[emp3r0r_version_string]\"", f"Version = \"{self.VERSION}\"")
         if self.target == "agent":
             # guardian shellcode
-            unsed("./lib/agent/def.go",
+            unsed("./lib/data/def.go",
                   "[persistence_shellcode]", CACHED_CONF['guardian_shellcode'])
-            unsed("./lib/agent/def.go",
+            unsed("./lib/data/def.go",
                   "[persistence_agent_path]", CACHED_CONF['guardian_agent_path'])
+
         # CA
         unsed("./lib/tun/tls.go", "[emp3r0r_ca]", self.CA)
+
         # CC IP
-        unsed("./lib/agent/def.go",
+        unsed("./lib/data/def.go",
               "CCAddress = \"https://[cc_ipaddr]\"", f"CCAddress = \"https://{self.CCIP}\"")
+
         # agent root path
-        unsed("./lib/agent/def.go",
+        unsed("./lib/data/def.go",
               "AgentRoot = \"[agent_root]\"", f"AgentRoot = \"{self.AgentRoot}\"")
+
         # indicator
-        unsed("./lib/agent/def.go", "[cc_indicator]", self.INDICATOR)
+        unsed("./lib/data/def.go",
+              "CCIndicator = \"[cc_indicator]\"", f"CCIndicator = \"{self.INDICATOR}\"")
+
+        # indicator wait
+        if 'indicator_wait_min' in CACHED_CONF:
+            unsed("./lib/data/def.go",
+                  "IndicatorWaitMin = 30", f"IndicatorWaitMin = {CACHED_CONF['indicator_wait_min']}")
+
+        if 'indicator_wait_max' in CACHED_CONF:
+            unsed("./lib/data/def.go",
+                  "IndicatorWaitMax = 120", f"IndicatorWaitMax = {CACHED_CONF['indicator_wait_max']}")
+
+        # broadcast_interval
+        if 'broadcast_interval_min' in CACHED_CONF:
+            unsed("./lib/data/def.go",
+                  "BroadcastIntervalMin = 30", f"BroadcastIntervalMin = {CACHED_CONF['broadcast_interval_min']}")
+
+        if 'broadcast_interval_max' in CACHED_CONF:
+            unsed("./lib/data/def.go",
+                  "BroadcastIntervalMax = 120", f"BroadcastIntervalMax = {CACHED_CONF['broadcast_interval_max']}")
+
         # cc indicator text
-        unsed("./lib/agent/def.go",
-              "CCIndicatorText = \"[agent_cc_text]\"", f"CCIndicatorText = \"{self.INDICATOR_TEXT}\"")
+        unsed("./lib/data/def.go",
+              "CCIndicatorText = \"[indicator_text]\"", f"CCIndicatorText = \"{self.INDICATOR_TEXT}\"")
+
         # agent UUID
-        unsed("./lib/agent/def.go", "[agent_uuid]", self.UUID)
+        unsed("./lib/data/def.go",
+              "AgentUUID = \"[agent_uuid]\"", f"AgentUUID = \"{self.UUID}\"")
+
         # ports
-        unsed("./lib/agent/def.go",
+        unsed("./lib/data/def.go",
               "CCPort = \"[cc_port]\"", f"CCPort = \"{CACHED_CONF['cc_port']}\"")
-        unsed("./lib/agent/def.go",
+
+        unsed("./lib/data/def.go",
               "SSHDPort = \"[sshd_port]\"", f"SSHDPort = \"{CACHED_CONF['sshd_port']}\"")
-        unsed("./lib/agent/def.go",
+
+        unsed("./lib/data/def.go",
               "ProxyPort = \"[proxy_port]\"", f"ProxyPort = \"{CACHED_CONF['proxy_port']}\"")
-        unsed("./lib/agent/def.go",
+
+        unsed("./lib/data/def.go",
               "BroadcastPort = \"[broadcast_port]\"", f"BroadcastPort = \"{CACHED_CONF['broadcast_port']}\"")
 
     def set_tags(self):
@@ -190,37 +220,67 @@ class GoBuild:
         '''
 
         # version
-        sed("./lib/agent/def.go",
+        sed("./lib/data/def.go",
             "Version = \"[emp3r0r_version_string]\"", f"Version = \"{self.VERSION}\"")
         if self.target == "agent":
             # guardian shellcode
-            sed("./lib/agent/def.go",
+            sed("./lib/data/def.go",
                 "[persistence_shellcode]", CACHED_CONF['guardian_shellcode'])
-            sed("./lib/agent/def.go",
+            sed("./lib/data/def.go",
                 "[persistence_agent_path]", CACHED_CONF['guardian_agent_path'])
+
         # CA
         sed("./lib/tun/tls.go", "[emp3r0r_ca]", self.CA)
+
         # CC IP
-        sed("./lib/agent/def.go",
+        sed("./lib/data/def.go",
             "CCAddress = \"https://[cc_ipaddr]\"", f"CCAddress = \"https://{self.CCIP}\"")
+
         # agent root path
-        sed("./lib/agent/def.go",
+        sed("./lib/data/def.go",
             "AgentRoot = \"[agent_root]\"", f"AgentRoot = \"{self.AgentRoot}\"")
+
         # indicator
-        sed("./lib/agent/def.go", "[cc_indicator]", self.INDICATOR)
+        sed("./lib/data/def.go",
+            "CCIndicator = \"[cc_indicator]\"", f"CCIndicator = \"{self.INDICATOR}\"")
+
+        # indicator wait
+        if 'indicator_wait_min' in CACHED_CONF:
+            sed("./lib/data/def.go",
+                "IndicatorWaitMin = 30", f"IndicatorWaitMin = {CACHED_CONF['indicator_wait_min']}")
+
+        if 'indicator_wait_max' in CACHED_CONF:
+            sed("./lib/data/def.go",
+                "IndicatorWaitMax = 120", f"IndicatorWaitMax = {CACHED_CONF['indicator_wait_max']}")
+
+        # broadcast_interval
+        if 'broadcast_interval_min' in CACHED_CONF:
+            sed("./lib/data/def.go",
+                "BroadcastIntervalMin = 30", f"BroadcastIntervalMin = {CACHED_CONF['broadcast_interval_min']}")
+
+        if 'broadcast_interval_max' in CACHED_CONF:
+            sed("./lib/data/def.go",
+                "BroadcastIntervalMax = 120", f"BroadcastIntervalMax = {CACHED_CONF['broadcast_interval_max']}")
+
         # cc indicator text
-        sed("./lib/agent/def.go",
-            "CCIndicatorText = \"[agent_cc_text]\"", f"CCIndicatorText = \"{self.INDICATOR_TEXT}\"")
+        sed("./lib/data/def.go",
+            "CCIndicatorText = \"[indicator_text]\"", f"CCIndicatorText = \"{self.INDICATOR_TEXT}\"")
+
         # agent UUID
-        sed("./lib/agent/def.go", "[agent_uuid]", self.UUID)
+        sed("./lib/data/def.go",
+            "AgentUUID = \"[agent_uuid]\"", f"AgentUUID = \"{self.UUID}\"")
+
         # ports
-        sed("./lib/agent/def.go",
+        sed("./lib/data/def.go",
             "CCPort = \"[cc_port]\"", f"CCPort = \"{CACHED_CONF['cc_port']}\"")
-        sed("./lib/agent/def.go",
+
+        sed("./lib/data/def.go",
             "SSHDPort = \"[sshd_port]\"", f"SSHDPort = \"{CACHED_CONF['sshd_port']}\"")
-        sed("./lib/agent/def.go",
+
+        sed("./lib/data/def.go",
             "ProxyPort = \"[proxy_port]\"", f"ProxyPort = \"{CACHED_CONF['proxy_port']}\"")
-        sed("./lib/agent/def.go",
+
+        sed("./lib/data/def.go",
             "BroadcastPort = \"[broadcast_port]\"", f"BroadcastPort = \"{CACHED_CONF['broadcast_port']}\"")
 
 
@@ -234,10 +294,12 @@ def clean():
     for f in to_rm:
         try:
             # remove directories too
-
             if os.path.isdir(f):
-                os.removedirs(f)
+                os.system(f"rm -rf {f}")
             else:
+                # we don't need to delete the config file
+                if f.endswith("build.json"):
+                    continue
                 os.remove(f)
             print(" Deleted "+f)
         except BaseException:
@@ -308,8 +370,8 @@ def main(target):
     '''
     main main main
     '''
-    ccip = "[cc_ipaddr]"
-    indicator = "[cc_indicator]"
+    ccip = ""
+    indicator = ""
     use_cached = False
 
     if target == "clean":
@@ -326,15 +388,13 @@ def main(target):
     if not use_cached:
         if yes_no("Clean everything and start over?"):
             clean()
-        ccip = input("CC server address (domain name or ip address): ").strip()
-        CACHED_CONF['ccip'] = ccip
+        ccip = input(
+            "CC server address (domain name or ip address, can be more than one, separate with space):\n> ").strip()
+        CACHED_CONF['ccip'] = ccip[0]
 
     if target == "cc":
-        cc_other = ""
+        cc_other = ' '.join(ccip[1:])
 
-        if not os.path.exists("./build/emp3r0r-key.pem"):
-            cc_other = input(
-                "Additional CC server addresses (separate with space): ").strip()
         gobuild = GoBuild(target="cc", cc_ip=ccip, cc_other_names=cc_other)
         gobuild.build()
 

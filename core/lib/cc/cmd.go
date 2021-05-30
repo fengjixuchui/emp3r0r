@@ -6,7 +6,7 @@ import (
 	"strings"
 
 	"github.com/fatih/color"
-	"github.com/jm33-m0/emp3r0r/core/lib/agent"
+	emp3r0r_data "github.com/jm33-m0/emp3r0r/core/lib/data"
 	"github.com/jm33-m0/emp3r0r/core/lib/util"
 )
 
@@ -131,7 +131,7 @@ func CmdHandler(cmd string) (err error) {
 		index, e := strconv.Atoi(cmdSplit[1])
 		label := strings.Join(cmdSplit[2:], " ")
 
-		var target *agent.SystemInfo
+		var target *emp3r0r_data.SystemInfo
 		if e != nil {
 			target = GetTargetFromTag(cmdSplit[1])
 			if target != nil {
@@ -160,7 +160,7 @@ func CmdHandler(cmd string) (err error) {
 
 		index, e := strconv.Atoi(cmdSplit[1])
 		if e != nil {
-			CurrentTarget = GetTargetFromTag(cmdSplit[1])
+			CurrentTarget = GetTargetFromTag(strings.Join(cmdSplit[1:], " "))
 			if CurrentTarget != nil {
 				GetTargetDetails(CurrentTarget)
 				CliPrintSuccess("Now targeting %s", CurrentTarget.Tag)
@@ -211,9 +211,12 @@ func CmdHandler(cmd string) (err error) {
 		helper := CmdHelpers[cmd]
 		if helper == nil {
 			filehelper := FileManagerHelpers[cmdSplit[0]]
-			if filehelper == nil {
-				CliPrintWarning("Exec: " + strconv.Quote(cmd))
+			if filehelper == nil && CurrentTarget != nil {
+				CliPrintWarning("Exec: %s on %s", strconv.Quote(cmd), strconv.Quote(CurrentTarget.Tag))
 				SendCmdToCurrentTarget(cmd)
+				return
+			} else if CurrentTarget == nil {
+				CliPrintError("Select a target so you can execute commands on it")
 				return
 			}
 			filehelper(cmd)
@@ -231,41 +234,41 @@ func CmdHelp(mod string) {
 	switch mod {
 	case "":
 		CliPrettyPrint("Command", "Description", &Commands)
-	case agent.ModLPE_SUGGEST:
+	case emp3r0r_data.ModLPE_SUGGEST:
 		help = map[string]string{
 			"lpe_helper": "'linux-smart-enumeration' or 'linux-exploit-suggester'?",
 		}
 		CliPrettyPrint("Option", "Help", &help)
-	case agent.ModCMD_EXEC:
+	case emp3r0r_data.ModCMD_EXEC:
 		help = map[string]string{
 			"cmd_to_exec": "Press TAB for some hints",
 		}
 		CliPrettyPrint("Option", "Help", &help)
-	case agent.ModPORT_FWD:
+	case emp3r0r_data.ModPORT_FWD:
 		help = map[string]string{
 			"to_port":     "Port (to forward to) on agent/CC side",
 			"listen_port": "Listen on CC/agent side",
 			"switch":      "Turn port mapping on/off, or use `reverse` mapping",
 		}
 		CliPrettyPrint("Option", "Help", &help)
-	case agent.ModPROXY:
+	case emp3r0r_data.ModPROXY:
 		help = map[string]string{
 			"port":   "Port of our local proxy server",
 			"status": "Turn proxy on/off",
 		}
 		CliPrettyPrint("Option", "Help", &help)
-	case agent.ModINJECTOR:
+	case emp3r0r_data.ModINJECTOR:
 		help = map[string]string{
 			"pid": "Target process PID, set to 0 to start a new process (sleep)",
 		}
 		CliPrettyPrint("Option", "Help", &help)
-	case agent.ModCLEAN_LOG:
+	case emp3r0r_data.ModCLEAN_LOG:
 		help = map[string]string{
 			"keyword": "Delete all log entries containing this keyword",
 		}
 		CliPrettyPrint("Option", "Help", &help)
 	default:
-		for modname, modhelp := range agent.ModuleDocs {
+		for modname, modhelp := range emp3r0r_data.ModuleDocs {
 			if mod == modname {
 				help = map[string]string{"<N/A>": modhelp}
 				CliPrettyPrint("Option", "Help", &help)

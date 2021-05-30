@@ -10,7 +10,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/jm33-m0/emp3r0r/core/lib/agent"
+	emp3r0r_data "github.com/jm33-m0/emp3r0r/core/lib/data"
 	"github.com/jm33-m0/emp3r0r/core/lib/util"
 )
 
@@ -35,14 +35,14 @@ func DownloadFile(url, path string) (err error) {
 }
 
 // SendCmd send command to agent
-func SendCmd(cmd string, a *agent.SystemInfo) error {
+func SendCmd(cmd string, a *emp3r0r_data.SystemInfo) error {
 	if a == nil {
 		return errors.New("SendCmd: No such agent")
 	}
 
-	var cmdData agent.MsgTunData
+	var cmdData emp3r0r_data.MsgTunData
 
-	cmdData.Payload = fmt.Sprintf("cmd%s%s", agent.OpSep, cmd)
+	cmdData.Payload = fmt.Sprintf("cmd%s%s", emp3r0r_data.OpSep, cmd)
 	cmdData.Tag = a.Tag
 
 	return Send2Agent(&cmdData, a)
@@ -143,7 +143,7 @@ func OpenInNewTerminalWindow(name, cmd string) error {
 	// works fine for gnome-terminal and xfce4-terminal
 	job := fmt.Sprintf("%s -t '%s' -e '%s || read'", terminal, name, cmd)
 
-	out, err := exec.Command("/bin/sh", "-c", job).CombinedOutput()
+	out, err := exec.Command("/bin/bash", "-c", job).CombinedOutput()
 	if err != nil {
 		return fmt.Errorf("%v: %s", err, out)
 	}
@@ -158,7 +158,8 @@ func TmuxNewWindow(name, cmd string) error {
 		return errors.New("You need to run emp3r0r under `tmux`")
 	}
 
-	job := exec.Command("tmux", "new-window", "-n", name, fmt.Sprintf("'%s | read'", cmd))
+	tmuxCmd := fmt.Sprintf("tmux new-window -n %s '%s || read'", name, cmd)
+	job := exec.Command("/bin/sh", "-c", tmuxCmd)
 	out, err := job.CombinedOutput()
 	if err != nil {
 		return fmt.Errorf("%v: %s", err, out)
@@ -176,7 +177,7 @@ func TmuxSplit(hV, cmd string) error {
 		return errors.New("You need to run emp3r0r under `tmux`, and make sure `less` is installed")
 	}
 
-	job := fmt.Sprintf("tmux split-window -%s %s", hV, cmd)
+	job := fmt.Sprintf("tmux split-window -%s '%s || read'", hV, cmd)
 
 	out, err := exec.Command("/bin/sh", "-c", job).CombinedOutput()
 	if err != nil {
@@ -187,9 +188,9 @@ func TmuxSplit(hV, cmd string) error {
 }
 
 // IsAgentExist is agent already in target list?
-func IsAgentExist(agent *agent.SystemInfo) bool {
+func IsAgentExist(t *emp3r0r_data.SystemInfo) bool {
 	for a := range Targets {
-		if a.Tag == agent.Tag {
+		if a.Tag == t.Tag {
 			return true
 		}
 	}

