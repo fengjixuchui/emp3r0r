@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/jm33-m0/emp3r0r/core/lib/util"
 )
 
@@ -33,7 +34,7 @@ func SSHClient(shell, port string) (err error) {
 
 	if !exists {
 		// start sshd server on target
-		cmd := fmt.Sprintf("!sshd %s %s", shell, port)
+		cmd := fmt.Sprintf("!sshd %s %s %s", shell, port, uuid.NewString())
 		if shell != "bash" {
 			err = SendCmdToCurrentTarget(cmd)
 			if err != nil {
@@ -50,12 +51,13 @@ func SSHClient(shell, port string) (err error) {
 			for {
 				time.Sleep(100 * time.Millisecond)
 				res, exists := CmdResults[cmd]
-				if !strings.Contains(res, "success") {
-					err = fmt.Errorf("Start sshd failed: %s", res)
-					return
-				}
 				if exists {
-					break
+					if strings.Contains(res, "success") {
+						break
+					} else {
+						err = fmt.Errorf("Start sshd failed: %s", res)
+						return
+					}
 				}
 			}
 		}
@@ -79,6 +81,7 @@ func SSHClient(shell, port string) (err error) {
 	}
 
 	// wait until the port mapping is ready
+	exists = false
 wait:
 	for i := 0; i < 100; i++ {
 		if exists {
@@ -111,7 +114,7 @@ wait:
 	// agent name
 	name := CurrentTarget.Hostname
 	label := Targets[CurrentTarget].Label
-	if label != "nolabel" {
+	if label != "nolabel" && label != "-" {
 		name = label
 	}
 	return TmuxNewWindow(fmt.Sprintf("%s-%s", name, shell), sshCmd)

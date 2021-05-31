@@ -12,10 +12,41 @@ linux post-exploitation framework made by linux user
 - feel free to develop your **private version** of emp3r0r, and i would appreciate that you contribute back to this branch
 
 
-https://user-images.githubusercontent.com/10167884/120102336-11e19000-c17d-11eb-8dc7-c18ce5cb5927.mp4
-
+https://user-images.githubusercontent.com/10167884/120104002-eebade80-c184-11eb-820c-30fd3da9db41.mp4
 
 ----------
+
+## features
+
+* beautiful terminal UI, use tmux for window management
+* multi-tasking, you don't need to wait for any commands to finish
+* basic API provided through unix socket
+* **perfect reverse shell** (true color, key bindings, custom bashrc, custom bash binary, etc)
+* auto **persistence** via various methods
+* **post-exploitation tools** like nmap, socat, are integreted with reverse shell
+* **credential harvesting** (WIP)
+* process **injection**
+* **shellcode** injection and dropper
+* ELF **patcher**
+* **hide processes and files** via libc hijacking
+* **port mapping**, from c2 side to agent side, and vice versa
+* agent side socks5 **proxy**
+* **ssh server**
+* auto root
+* **LPE** suggest
+* system info collecting
+* file management, **resumable download**
+* log cleaner
+* screenshot
+* **stealth** connection
+* anti-antivirus
+* internet access checker
+* **autoproxy** for semi-isolated networks
+* **reverse proxy** to bring every host online
+* all of these in one **HTTP2** connection
+* can be encapsulated in any external proxies such as **TOR**, and **CDNs**
+* interoperability with **metasploit / Cobalt Strike**
+* and many more...
 
 ## what to expect (in future releases)
 
