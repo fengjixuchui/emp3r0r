@@ -2,7 +2,6 @@ package cc
 
 import (
 	"encoding/json"
-	"errors"
 	"fmt"
 	"io/ioutil"
 	"os"
@@ -19,8 +18,8 @@ import (
 
 var (
 	// DebugLevel what kind fof logs do we want to see
-	// 0 (INFO) -> 1 (WARN) -> 2 (ERROR)
-	DebugLevel = 0
+	// 3 (DEBUG) -> 2 (INFO) -> 1 (WARN)
+	DebugLevel = 2
 
 	// IsAPIEnabled Indicate whether we are in headless mode
 	IsAPIEnabled = false
@@ -356,7 +355,7 @@ func ListModules() {
 func Send2Agent(data *emp3r0r_data.MsgTunData, agent *emp3r0r_data.SystemInfo) (err error) {
 	ctrl := Targets[agent]
 	if ctrl == nil {
-		return errors.New("Send2Agent: Target is not connected")
+		return fmt.Errorf("Send2Agent (%s): Target is not connected", data.Payload)
 	}
 	out := json.NewEncoder(ctrl.Conn)
 

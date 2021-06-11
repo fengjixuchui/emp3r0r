@@ -8,13 +8,23 @@ import (
 	"net"
 	"time"
 
+	"github.com/ncruces/go-dns"
 	"github.com/posener/h2conn"
 	"github.com/txthinking/socks5"
 )
 
 // StartSocks5Proxy sock5 proxy server on agent, listening on addr
-// to use it, forward port 10800 to CC
-func StartSocks5Proxy(addr string, proxyserver *socks5.Server) (err error) {
+func StartSocks5Proxy(addr, doh string, proxyserver *socks5.Server) (err error) {
+	if doh != "" {
+		// use DoH resolver
+		net.DefaultResolver, err = dns.NewDoHResolver(
+			doh,
+			dns.DoHCache())
+		if err != nil {
+			return
+		}
+	}
+
 	if proxyserver == nil {
 		socks5.Debug = true
 		proxyserver, err = socks5.NewClassicServer(addr, "", "", "", 10, 10)
@@ -123,12 +133,6 @@ func FwdToDport(ctx context.Context, cancel context.CancelFunc,
 			return
 		}
 	}()
-
-	_, err = h2.Write([]byte(sessionID))
-	if err != nil {
-		log.Printf("Send hello: %v", err)
-		return
-	}
 
 	for ctx.Err() == nil {
 		time.Sleep(500 * time.Millisecond)

