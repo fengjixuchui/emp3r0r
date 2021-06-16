@@ -183,9 +183,9 @@ func SetDynamicPrompt() {
 		CurrentMod = "none" // if no module is selected
 	}
 	dynamicPrompt := fmt.Sprintf("%s @%s (%s) "+color.HiCyanString("> "),
-		color.HiCyanString(PromptName),
-		color.CyanString(shortName),
-		color.HiBlueString(CurrentMod),
+		color.New(color.Bold, color.FgHiCyan).Sprint(PromptName),
+		color.New(color.FgCyan, color.Underline).Sprint(shortName),
+		color.New(color.FgHiBlue).Sprint(CurrentMod),
 	)
 	EmpReadLine.Config.Prompt = dynamicPrompt
 	EmpReadLine.SetPrompt(dynamicPrompt)
@@ -204,12 +204,12 @@ func CliPrintDebug(format string, a ...interface{}) {
 			resp.MsgType = LOG
 			data, err := json.Marshal(resp)
 			if err != nil {
-				log.Printf("CliPrintInfo: %v", err)
+				log.Printf("CliPrintDebug: %v", err)
 				return
 			}
 			_, err = APIConn.Write([]byte(data))
 			if err != nil {
-				log.Printf("CliPrintInfo: %v", err)
+				log.Printf("CliPrintDebug: %v", err)
 			}
 		}
 	}
@@ -239,32 +239,10 @@ func CliPrintInfo(format string, a ...interface{}) {
 	}
 }
 
-// CliMsg print log in cyan, regardless of debug level
-func CliMsg(format string, a ...interface{}) {
-	log.Println(color.CyanString(format, a...))
-	if IsAPIEnabled {
-		// send to socket
-		var resp APIResponse
-		msg := GetDateTime() + " MSG: " + fmt.Sprintf(format, a...)
-		resp.MsgData = []byte(msg)
-		resp.Alert = false
-		resp.MsgType = LOG
-		data, err := json.Marshal(resp)
-		if err != nil {
-			log.Printf("CliPrintInfo: %v", err)
-			return
-		}
-		_, err = APIConn.Write([]byte(data))
-		if err != nil {
-			log.Printf("CliPrintInfo: %v", err)
-		}
-	}
-}
-
-// CliPrintWarning print log in yellow
+// CliPrintWarning print log in hiyellow
 func CliPrintWarning(format string, a ...interface{}) {
 	if DebugLevel >= 1 {
-		log.Println(color.YellowString(format, a...))
+		log.Println(color.HiYellowString(format, a...))
 		if IsAPIEnabled {
 			// send to socket
 			var resp APIResponse
@@ -285,9 +263,55 @@ func CliPrintWarning(format string, a ...interface{}) {
 	}
 }
 
+// CliMsg print log in cyan, regardless of debug level
+func CliMsg(format string, a ...interface{}) {
+	log.Println(color.CyanString(format, a...))
+	if IsAPIEnabled {
+		// send to socket
+		var resp APIResponse
+		msg := GetDateTime() + " MSG: " + fmt.Sprintf(format, a...)
+		resp.MsgData = []byte(msg)
+		resp.Alert = false
+		resp.MsgType = LOG
+		data, err := json.Marshal(resp)
+		if err != nil {
+			log.Printf("CliMsg: %v", err)
+			return
+		}
+		_, err = APIConn.Write([]byte(data))
+		if err != nil {
+			log.Printf("CliMsg: %v", err)
+		}
+	}
+}
+
+// CliAlert print log in blinking text
+func CliAlert(textColor color.Attribute, format string, a ...interface{}) {
+	alertColor := color.New(color.Bold, textColor, color.BlinkSlow)
+	log.Print(alertColor.Sprintf(format, a...))
+	if IsAPIEnabled {
+		// send to socket
+		var resp APIResponse
+		msg := GetDateTime() + " ALERT: " + fmt.Sprintf(format, a...)
+		resp.MsgData = []byte(msg)
+		resp.Alert = false
+		resp.MsgType = LOG
+		data, err := json.Marshal(resp)
+		if err != nil {
+			log.Printf("CliAlert: %v", err)
+			return
+		}
+		_, err = APIConn.Write([]byte(data))
+		if err != nil {
+			log.Printf("CliAlert: %v", err)
+		}
+	}
+}
+
 // CliPrintSuccess print log in green
 func CliPrintSuccess(format string, a ...interface{}) {
-	log.Println(color.HiGreenString(format, a...))
+	successColor := color.New(color.Bold, color.FgHiGreen)
+	log.Print(successColor.Sprintf(format, a...))
 	if IsAPIEnabled {
 		// send to socket
 		var resp APIResponse
@@ -309,7 +333,8 @@ func CliPrintSuccess(format string, a ...interface{}) {
 
 // CliPrintError print log in red
 func CliPrintError(format string, a ...interface{}) {
-	log.Println(color.HiRedString(format, a...))
+	errorColor := color.New(color.Bold, color.FgHiRed)
+	log.Print(errorColor.Sprintf(format, a...))
 	if IsAPIEnabled {
 		// send to socket
 		var resp APIResponse

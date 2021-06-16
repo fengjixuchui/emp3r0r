@@ -2,6 +2,7 @@ package cc
 
 import (
 	"fmt"
+	"log"
 	"strconv"
 	"strings"
 
@@ -119,7 +120,7 @@ func CmdHandler(cmd string) (err error) {
 
 	case cmdSplit[0] == "debug":
 		if len(cmdSplit) < 2 {
-			CliPrintError("debug [ 1, 2, 3 ]")
+			CliPrintError("debug [ 0, 1, 2, 3 ]")
 			return
 		}
 		level, e := strconv.Atoi(cmdSplit[1])
@@ -128,6 +129,11 @@ func CmdHandler(cmd string) (err error) {
 			return
 		}
 		DebugLevel = level
+		if DebugLevel > 2 {
+			log.SetFlags(log.Ldate | log.Ltime | log.Lmicroseconds | log.Llongfile | log.Lmsgprefix)
+		} else {
+			log.SetFlags(log.Ldate | log.Ltime | log.LstdFlags)
+		}
 
 	case cmdSplit[0] == "delete_port_fwd":
 		if len(cmdSplit) < 2 {
