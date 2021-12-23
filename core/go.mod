@@ -26,11 +26,11 @@ require (
 	github.com/otiai10/copy v1.7.0
 	github.com/pierrec/lz4 v2.6.1+incompatible // indirect
 	github.com/posener/h2conn v0.0.0-20180911140238-13e7df33ed15
-	github.com/shirou/gopsutil/v3 v3.21.10
+	github.com/shirou/gopsutil/v3 v3.21.11
 	github.com/txthinking/socks5 v0.0.0-20211121111206-e03c1217a50b
 	github.com/ulikunitz/xz v0.5.10 // indirect
 	github.com/vishvananda/netlink v1.1.0
 	github.com/xi2/xz v0.0.0-20171230120015-48954b6210f8 // indirect
-	golang.org/x/crypto v0.0.0-20211117183948-ae814b36b871
-	golang.org/x/net v0.0.0-20211118161319-6a13c67c3ce4
+	golang.org/x/crypto v0.0.0-20211215153901-e495a2d5b3d3
+	golang.org/x/net v0.0.0-20211216030914-fe4d6282115f
 )
