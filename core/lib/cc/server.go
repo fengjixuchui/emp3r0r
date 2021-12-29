@@ -20,6 +20,7 @@ import (
 	"github.com/jm33-m0/emp3r0r/core/lib/tun"
 	"github.com/jm33-m0/emp3r0r/core/lib/util"
 	"github.com/posener/h2conn"
+	"github.com/schollz/progressbar/v3"
 )
 
 // StreamHandler allow the http handler to use H2Conn
@@ -170,6 +171,14 @@ func (sh *StreamHandler) ftpHandler(wrt http.ResponseWriter, req *http.Request) 
 	}
 	defer f.Close()
 
+	// progressbar
+	targetFile := FileGetDir + util.FileBaseName(filename)
+	targetSize := util.FileSize(targetFile)
+	nowSize := util.FileSize(filewrite)
+	bar := progressbar.DefaultBytes(targetSize)
+	bar.Add64(nowSize) // downloads are resumable
+	defer bar.Close()
+
 	// read filedata
 	for sh.H2x.Ctx.Err() == nil {
 		data := make([]byte, sh.BufSize)
@@ -188,6 +197,9 @@ func (sh *StreamHandler) ftpHandler(wrt http.ResponseWriter, req *http.Request) 
 			CliPrintError("ftpHandler failed to save file: %v", err)
 			return
 		}
+
+		// progress
+		bar.Add(sh.BufSize)
 	}
 }
 
