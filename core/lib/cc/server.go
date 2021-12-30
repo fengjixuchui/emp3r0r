@@ -123,6 +123,13 @@ func (sh *StreamHandler) ftpHandler(wrt http.ResponseWriter, req *http.Request) 
 			return
 		}
 	}
+
+	// file
+	targetFile := FileGetDir + util.FileBaseName(filename)
+	targetSize := util.FileSize(targetFile)
+	nowSize := util.FileSize(filewrite)
+
+	// on exit
 	defer func() {
 		// cleanup
 		if sh.H2x.Conn != nil {
@@ -145,9 +152,8 @@ func (sh *StreamHandler) ftpHandler(wrt http.ResponseWriter, req *http.Request) 
 		}
 
 		// have we finished downloading?
-		targetFile := FileGetDir + util.FileBaseName(filename)
-		nowSize := util.FileSize(filewrite)
-		targetSize := util.FileSize(targetFile)
+		nowSize = util.FileSize(filewrite)
+		targetSize = util.FileSize(targetFile)
 		if nowSize == targetSize && nowSize >= 0 {
 			err = os.Rename(filewrite, targetFile)
 			if err != nil {
@@ -172,12 +178,20 @@ func (sh *StreamHandler) ftpHandler(wrt http.ResponseWriter, req *http.Request) 
 	defer f.Close()
 
 	// progressbar
-	targetFile := FileGetDir + util.FileBaseName(filename)
-	targetSize := util.FileSize(targetFile)
-	nowSize := util.FileSize(filewrite)
-	bar := progressbar.DefaultBytes(targetSize)
+	targetSize = util.FileSize(targetFile)
+	nowSize = util.FileSize(filewrite)
+	bar := progressbar.DefaultBytesSilent(targetSize)
 	bar.Add64(nowSize) // downloads are resumable
 	defer bar.Close()
+
+	// log progress instead of showing the actual progressbar
+	go func() {
+		for state := bar.State(); state.CurrentPercent < 1; time.Sleep(time.Second) {
+			state = bar.State()
+			CliPrintInfo("%.2f%% downloaded at %.2fKB/s, %.2fs passed, %.2fs left",
+				state.CurrentPercent*100, state.KBsPerSecond, state.SecondsSince, state.SecondsLeft)
+		}
+	}()
 
 	// read filedata
 	for sh.H2x.Ctx.Err() == nil {
