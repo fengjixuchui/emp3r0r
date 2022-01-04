@@ -21,7 +21,7 @@ var SSHShellPort = make(map[string]string)
 // SSHClient ssh to sshd server, with shell access in a new tmux window
 // shell: the executable to run, eg. bash, python
 // port: serve this shell on agent side 127.0.0.1:port
-func SSHClient(shell, port string) (err error) {
+func SSHClient(shell, args, port string) (err error) {
 	if !util.IsCommandExist("ssh") {
 		err = fmt.Errorf("ssh must be installed")
 		return
@@ -34,11 +34,6 @@ func SSHClient(shell, port string) (err error) {
 		port = new_port // reset port if trying to open shells other than bash
 		SetOption([]string{"port", new_port})
 		CliPrintWarning("Switching to a new port %s since we are not requesting bash", port)
-	}
-	if shell == "bash" {
-		port = emp3r0r_data.SSHDPort // default shell is bash, on a random default port
-		SetOption([]string{"port", emp3r0r_data.SSHDPort})
-		CliPrintWarning("Switching to default bash port %s", emp3r0r_data.SSHDPort)
 	}
 	to := "127.0.0.1:" + port // decide what port/shell to connect to
 
@@ -54,7 +49,7 @@ func SSHClient(shell, port string) (err error) {
 					new_port := strconv.Itoa(util.RandInt(2048, 65535))
 					CliPrintWarning("Port %s has %s shell on it, restarting with a different port %s", port, s, new_port)
 					SetOption([]string{"port", new_port})
-					SSHClient(shell, new_port)
+					SSHClient(shell, args, new_port)
 					return
 				}
 			}
@@ -67,32 +62,40 @@ func SSHClient(shell, port string) (err error) {
 
 	if !exists {
 		// start sshd server on target
-		cmd := fmt.Sprintf("!sshd %s %s %s", shell, port, uuid.NewString())
-		if shell != "bash" {
-			err = SendCmdToCurrentTarget(cmd)
-			if err != nil {
-				return
-			}
-			CliPrintInfo("Starting sshd (%s) on target %s", shell, strconv.Quote(CurrentTarget.Tag))
+		cmd_id := uuid.NewString()
+		if args == "" {
+			args = "--"
+		}
+		cmd := fmt.Sprintf("!sshd %s %s %s", shell, port, args)
+		err = SendCmdToCurrentTarget(cmd, cmd_id)
+		if err != nil {
+			return
+		}
+		CliPrintInfo("Waiting for sshd (%s) on target %s", shell, strconv.Quote(CurrentTarget.Tag))
 
-			// wait until sshd is up
-			defer func() {
-				CmdResultsMutex.Lock()
-				delete(CmdResults, cmd)
-				CmdResultsMutex.Unlock()
-			}()
-			for {
-				time.Sleep(100 * time.Millisecond)
-				res, exists := CmdResults[cmd]
-				if exists {
-					if strings.Contains(res, "success") {
-						break
-					} else {
-						err = fmt.Errorf("Start sshd (%s) failed: %s", shell, res)
-						return
-					}
+		// wait until sshd is up
+		defer func() {
+			CmdResultsMutex.Lock()
+			delete(CmdResults, cmd_id)
+			CmdResultsMutex.Unlock()
+		}()
+		is_response := false
+		res := ""
+		for i := 0; i < 100; i++ {
+			time.Sleep(100 * time.Millisecond)
+			res, is_response = CmdResults[cmd_id]
+			if is_response {
+				if strings.Contains(res, "success") {
+					break
+				} else {
+					err = fmt.Errorf("Start sshd (%s) failed: %s", shell, res)
+					return
 				}
 			}
+		}
+		if !is_response {
+			err = fmt.Errorf("Didn't get response from agent (%s), aborting", CurrentTarget.Tag)
+			return
 		}
 
 		// set up port mapping for the ssh session
@@ -140,9 +143,9 @@ wait:
 	}
 	sshCmd := fmt.Sprintf("%s -p %s -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no 127.0.0.1",
 		sshPath, lport)
-	CliPrintSuccess("Opening SSH (%s - %s) session for %s in new window. "+
-		"If that fails, please execute command %s manaully",
-		shell, port, CurrentTarget.Tag, strconv.Quote(sshCmd))
+	CliPrintSuccess("\nOpening SSH (%s - %s) session for %s in new window.\n"+
+		"If that fails, please execute command\n%s\nmanaully",
+		shell, port, CurrentTarget.Tag, sshCmd)
 
 	// agent name
 	name := CurrentTarget.Hostname

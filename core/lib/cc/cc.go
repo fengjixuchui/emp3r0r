@@ -198,6 +198,7 @@ func GetTargetDetails(target *emp3r0r_data.SystemInfo) {
 
 	// info map
 	infoMap := map[string]string{
+		"Version":   color.HiWhiteString(target.Version),
 		"Hostname":  color.HiCyanString(target.Hostname),
 		"Process":   color.HiMagentaString(procInfo),
 		"User":      userInfo,
@@ -357,6 +358,9 @@ func ListModules() {
 func Send2Agent(data *emp3r0r_data.MsgTunData, agent *emp3r0r_data.SystemInfo) (err error) {
 	ctrl := Targets[agent]
 	if ctrl == nil {
+		return fmt.Errorf("Send2Agent (%s): Target is not connected", data.Payload)
+	}
+	if ctrl.Conn == nil {
 		return fmt.Errorf("Send2Agent (%s): Target is not connected", data.Payload)
 	}
 	out := json.NewEncoder(ctrl.Conn)

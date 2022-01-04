@@ -9,6 +9,7 @@ import (
 	"io/ioutil"
 	"log"
 	"math/rand"
+	mathRand "math/rand"
 	"os"
 	"os/exec"
 	"strings"
@@ -35,7 +36,7 @@ type FileStat struct {
 
 // LsPath ls path and return a json
 func LsPath(path string) (res string, err error) {
-	files, err := ioutil.ReadDir("./")
+	files, err := ioutil.ReadDir(path)
 	if err != nil {
 		log.Printf("LsPath: %v", err)
 		return
@@ -151,6 +152,17 @@ func RandInt(min, max int) int {
 	}
 	rand.Seed(int64(binary.LittleEndian.Uint64(b[:])))
 	return min + rand.Intn(max-min)
+}
+
+// RandStr random string
+func RandStr(n int) string {
+	var letters = []rune("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ")
+	mathRand.Seed(time.Now().Unix())
+	b := make([]rune, n)
+	for i := range b {
+		b[i] = letters[mathRand.Intn(len(letters))]
+	}
+	return string(b)
 }
 
 // FileBaseName /path/to/foo -> foo

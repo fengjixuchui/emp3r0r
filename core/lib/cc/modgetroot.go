@@ -29,16 +29,16 @@ func moduleLPE() {
 
 	// exec
 	CliMsg("This can take some time, please be patient")
-	cmd := "!" + helperName
+	cmd := "!lpe " + helperName
 	CliPrintInfo("Running " + cmd)
-	err = SendCmd(cmd, target)
+	err = SendCmd(cmd, "", target)
 	if err != nil {
 		CliPrintError("Run %s: %v", cmd, err)
 	}
 }
 
 func moduleGetRoot() {
-	err := SendCmd("!get_root", CurrentTarget)
+	err := SendCmd("!get_root", "", CurrentTarget)
 	if err != nil {
 		CliPrintError("SendCmd: %v", err)
 		return
