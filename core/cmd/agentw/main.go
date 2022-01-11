@@ -1,6 +1,6 @@
 package main
 
-// build +linux
+//build +windows
 
 import (
 	"context"
@@ -16,7 +16,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/jm33-m0/emp3r0r/core/lib/agent"
+	agent "github.com/jm33-m0/emp3r0r/core/lib/agentw"
 	emp3r0r_data "github.com/jm33-m0/emp3r0r/core/lib/data"
 	"github.com/jm33-m0/emp3r0r/core/lib/tun"
 	"github.com/jm33-m0/emp3r0r/core/lib/util"
@@ -53,7 +53,10 @@ func main() {
 	}
 
 	// PATH
-	os.Setenv("PATH", fmt.Sprintf("%s:/bin:/usr/bin:/usr/local/bin", emp3r0r_data.UtilsPath))
+	os.Setenv("PATH", fmt.Sprintf(`%s;C:\Windows;C:\Windows\System32;`+
+		`C:\Windows\System32\WindowsPowerShell\v1.0`,
+		emp3r0r_data.UtilsPath))
+
 	// HOME
 	u, err := user.Current()
 	if err != nil {

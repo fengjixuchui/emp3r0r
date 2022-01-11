@@ -1,6 +1,6 @@
-package agent
+package agentw
 
-// build +linux
+//build +windows
 
 import (
 	"encoding/json"
@@ -10,6 +10,7 @@ import (
 	"strconv"
 	"strings"
 
+	emp3r0r_data "github.com/jm33-m0/emp3r0r/core/lib/data"
 	"github.com/jm33-m0/emp3r0r/core/lib/tun"
 	"github.com/jm33-m0/emp3r0r/core/lib/util"
 )
@@ -61,8 +62,8 @@ func shellHelper(cmdSlice []string) (out string) {
 
 func shellNet() (out string) {
 	ipa := tun.IPa()
-	ipneigh := IPNeigh()
-	ipr := IPr()
+	ipneigh := []string{emp3r0r_data.Unknown}
+	ipr := tun.IPr()
 
 	out = fmt.Sprintf("[*] ip addr:\n    %s"+
 		"\n\n[*] ip route:\n    %s"+

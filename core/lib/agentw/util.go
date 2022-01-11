@@ -1,6 +1,6 @@
-package agent
+package agentw
 
-// build +linux
+//build +windows
 
 import (
 	"encoding/json"
@@ -96,7 +96,7 @@ func CollectSystemInfo() *emp3r0r_data.SystemInfo {
 	info.GPU = util.GetGPUInfo()
 	info.Mem = fmt.Sprintf("%d MB", util.GetMemSize())
 	info.Hardware = util.CheckProduct()
-	info.Container = CheckContainer()
+	info.Container = emp3r0r_data.Unknown
 	info.Transport = emp3r0r_data.Transport
 
 	// have root?
@@ -123,7 +123,7 @@ func CollectSystemInfo() *emp3r0r_data.SystemInfo {
 	info.IPs = tun.IPa()
 
 	// arp -a ?
-	info.ARP = IPNeigh()
+	info.ARP = []string{emp3r0r_data.Unknown}
 
 	return &info
 }

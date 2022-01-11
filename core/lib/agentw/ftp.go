@@ -1,6 +1,6 @@
-package agent
+package agentw
 
-// build +linux
+//build +windows
 
 import (
 	"bufio"

