@@ -15,6 +15,11 @@ type Option struct {
 }
 
 var (
+	// ModuleDir stores custom modules
+	// cc binary is saved as `./core/build/cc`,
+	// and modules are stored in `./core/modules`
+	ModuleDir = "../modules/"
+
 	// CurrentMod selected module
 	CurrentMod = "<blank>"
 
@@ -25,14 +30,14 @@ var (
 	Options = make(map[string]*Option)
 
 	// ShellHelpInfo provide utilities like ps, kill, etc
+	// deprecated
 	ShellHelpInfo = map[string]string{
-		HELP:      "Display this help",
-		"upgrade": "A fully interactive reverse shell from HTTP2 tunnel, type `exit` to leave",
-		"#ps":     "List processes: `ps`",
-		"#kill":   "Kill process: `kill <PID>`",
-		"#net":    "Show network info",
-		"put":     "Put a file from CC to agent: `put <local file> <remote path>`",
-		"get":     "Get a file from agent: `get <remote file>`",
+		HELP:    "Display this help",
+		"#ps":   "List processes: `ps`",
+		"#kill": "Kill process: `kill <PID>`",
+		"#net":  "Show network info",
+		"put":   "Put a file from CC to agent: `put <local file> <remote path>`",
+		"get":   "Get a file from agent: `get <remote file>`",
 	}
 
 	// ModuleHelpers a map of module helpers
@@ -175,6 +180,14 @@ func UpdateOptions(modName string) (exist bool) {
 		}
 		currentOpt.Vals = methods
 		currentOpt.Val = "all"
+
+	default:
+		// custom modules
+		for arg := range emp3r0r_data.ModuleHelp[modName] {
+			addIfNotFound(arg)
+
+			// TODO read default values
+		}
 	}
 
 	return
