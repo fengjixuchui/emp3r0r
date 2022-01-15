@@ -113,6 +113,7 @@ func CmdHandler(cmd string) (err error) {
 				}
 				UpdateOptions(CurrentMod)
 				CliPrintInfo("Using module %s", strconv.Quote(CurrentMod))
+				ModuleDetails(CurrentMod)
 				CliListOptions()
 
 				return
@@ -121,8 +122,13 @@ func CmdHandler(cmd string) (err error) {
 		CliPrintError("No such module: %s", strconv.Quote(cmdSplit[1]))
 
 	case cmdSplit[0] == "set":
+		if len(cmdSplit) < 2 {
+			CliPrintError("set what?")
+			return
+		}
 		// hand to SetOption helper
 		SetOption(cmdSplit[1:])
+		CliListOptions()
 
 	case cmdSplit[0] == "debug":
 		if len(cmdSplit) < 2 {
@@ -256,6 +262,11 @@ func CmdHandler(cmd string) (err error) {
 // print help for modules
 func CmdHelp(mod string) {
 	help := make(map[string]string)
+	if mod == "" {
+		CliPrettyPrint("Command", "Help", &Commands)
+		return
+	}
+
 	for modname, modhelp := range emp3r0r_data.ModuleComments {
 		if mod == modname {
 			exists := false

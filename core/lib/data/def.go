@@ -62,6 +62,9 @@ var (
 	// UtilsPath binary path of utilities
 	UtilsPath = AgentRoot + "/bin"
 
+	// DefaultShell the shell to use, use static bash binary when possible
+	DefaultShell = UtilsPath + "/bash"
+
 	// Libemp3r0rFile shard library of emp3r0r, for hiding and persistence
 	Libemp3r0rFile = UtilsPath + "/libe.so"
 
@@ -122,7 +125,7 @@ const (
 	Unknown = "Unknown"
 )
 
-// Module names
+// built-in module names
 const (
 	ModCMD_EXEC     = "cmd_exec"
 	ModCLEAN_LOG    = "clean_log"
@@ -147,7 +150,7 @@ var PersistMethods = map[string]string{
 	"patcher":    "patcher",
 }
 
-// Module help info
+// Module help info, ls_modules shows this
 var ModuleComments = map[string]string{
 	ModCMD_EXEC:     "Run a single command on a target",
 	ModCLEAN_LOG:    "Delete lines containing keyword from *tmp logs",
@@ -163,6 +166,7 @@ var ModuleComments = map[string]string{
 }
 
 // Module help for options, does not include every module since not all modules need args
+// help module shows this
 var ModuleHelp = map[string]map[string]string{
 	ModCMD_EXEC: {
 		"cmd_to_exec": "Press TAB for some hints",
@@ -178,8 +182,8 @@ var ModuleHelp = map[string]map[string]string{
 		"status": "Turn proxy on/off",
 	},
 	ModPORT_FWD: {
-		"to_port":     "Port (to forward to) on agent/CC side",
-		"listen_port": "Listen on CC/agent side",
+		"to":          "Address:Port (to forward to) on agent/CC side",
+		"listen_port": "Listen port on CC/agent side",
 		"switch":      "Turn port mapping on/off, or use `reverse` mapping",
 	},
 	ModSHELL: {

