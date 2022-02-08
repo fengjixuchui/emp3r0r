@@ -125,11 +125,22 @@ func InitModules() {
 		return
 	}
 
+	// get vaccine ready
+	if !util.IsFileExist(UtilsArchive) {
+		err = CreateVaccineArchive()
+		if err != nil {
+			CliPrintWarning("CreateVaccineArchive: %v", err)
+		}
+	}
+
 	for _, dir := range dirs {
 		if !dir.IsDir() {
 			continue
 		}
 		config_file := ModuleDir + dir.Name() + "/config.json"
+		if !util.IsFileExist(config_file) {
+			continue
+		}
 		config, err := readModCondig(config_file)
 		if err != nil {
 			CliPrintWarning("Reading config from %s: %v", dir.Name(), err)

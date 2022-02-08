@@ -113,7 +113,7 @@ func AppendToFile(filename string, text string) (err error) {
 func IsStrInFile(text, filepath string) bool {
 	f, err := os.Open(filepath)
 	if err != nil {
-		log.Print(err)
+		log.Printf("IsStrInFile: %v", err)
 		return false
 	}
 	s := bufio.NewScanner(f)
@@ -206,8 +206,12 @@ func FileSize(path string) (size int64) {
 
 func TarBz2(dir, outfile string) error {
 	// map files on disk to their paths in the archive
-	files, err := archiver.FilesFromDisk(map[string]string{
-		dir: FileBaseName(dir),
+	archive_dir_name := FileBaseName(dir)
+	if dir == "." {
+		archive_dir_name = ""
+	}
+	files, err := archiver.FilesFromDisk(nil, map[string]string{
+		dir: archive_dir_name,
 	})
 	if err != nil {
 		return err

