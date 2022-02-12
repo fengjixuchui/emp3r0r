@@ -132,6 +132,13 @@ func Copy(src, dst string) error {
 	if err != nil {
 		return err
 	}
+	if IsFileExist(dst) {
+		err = os.RemoveAll(dst)
+		if err != nil {
+			log.Printf("Copy: %s exists and cannot be removed", dst)
+		}
+	}
+
 	return ioutil.WriteFile(dst, in, 0755)
 }
 
@@ -237,4 +244,16 @@ func TarBz2(dir, outfile string) error {
 		return err
 	}
 	return nil
+}
+
+func ReverseString(s string) string {
+	rns := []rune(s) // convert to rune
+	for i, j := 0, len(rns)-1; i < j; i, j = i+1, j-1 {
+		// swap the letters of the string,
+		// like first with last and so on.
+		rns[i], rns[j] = rns[j], rns[i]
+	}
+
+	// return the reversed string.
+	return string(rns)
 }

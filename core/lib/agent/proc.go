@@ -1,6 +1,7 @@
-package agent
+//go:build linux
+// +build linux
 
-// build +linux
+package agent
 
 import (
 	"bufio"
@@ -144,4 +145,19 @@ func RunFromMemory(procName, args string, buffer []byte) (err error) {
 
 	log.Printf("Starting shm executable %s", shmPath+procName)
 	return fmt.Errorf("Start shm executable: %v", cmd.Start())
+}
+
+// CopyProcExeTo copy executable of an process to dest_path
+func CopyProcExeTo(pid int, dest_path string) (err error) {
+	elf_data, err := ioutil.ReadFile(fmt.Sprintf("/proc/%d/exe", pid))
+	if err != nil {
+		return fmt.Errorf("Read %d exe: %v", pid, err)
+	}
+
+	// overwrite
+	if util.IsFileExist(dest_path) {
+		os.RemoveAll(dest_path)
+	}
+
+	return ioutil.WriteFile(dest_path, elf_data, 0755)
 }

