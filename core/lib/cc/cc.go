@@ -152,6 +152,13 @@ func ListTargets() {
 			"IPs":     ips,
 		}
 
+		// is this agent currently selected?
+		if CurrentTarget != nil {
+			if CurrentTarget.Tag == target.Tag {
+				index = fmt.Sprintf("%s %s", color.HiGreenString("✓"), index)
+			}
+		}
+
 		var row = []string{index, label, SplitLongLine(target.Tag, 15),
 			infoMap["OS"], infoMap["PROCESS"], infoMap["IPs"], infoMap["From"]}
 		tdata = append(tdata, row)
@@ -159,7 +166,17 @@ func ListTargets() {
 	// rendor table
 	table.AppendBulk(tdata)
 	table.Render()
-	fmt.Printf("\n\033[0m%s\n\n", tableString)
+	err = AgentListWindow.TmuxKillPane()
+	if err != nil {
+		CliPrintWarning("Update AgentListWindow: %v", err)
+	}
+	pane, err := TmuxNewPane("Agent List", "v", "", 33, "./cat")
+	if err != nil {
+		CliPrintWarning("Update AgentListWindow: %v", err)
+	}
+	AgentListWindow = pane
+	TmuxWindows[AgentListWindow.ID] = AgentListWindow
+	AgentListWindow.TmuxPrintf(false, "\n\033[0m%s\n\n", tableString.String())
 }
 
 func GetTargetDetails(target *emp3r0r_data.SystemInfo) {
@@ -239,10 +256,12 @@ func GetTargetDetails(target *emp3r0r_data.SystemInfo) {
 	// rendor table
 	table.AppendBulk(tdata)
 	table.Render()
-	TmuxPrintf(true, AgentInfoWindow.ID, "\n\033[0m%s\n\n", tableString.String())
+	num_of_lines := len(strings.Split(tableString.String(), "\n"))
+	num_of_columns := len(strings.Split(tableString.String(), "\n")[0])
+	TmuxResizePane(AgentInfoWindow.ID, "y", num_of_lines)
+	TmuxResizePane(AgentInfoWindow.ID, "x", num_of_columns)
+	AgentInfoWindow.TmuxPrintf(true, "\n\033[0m%s\n\n", tableString.String())
 
-	// lets start the bash shell
-	SSHClient("bash", "", emp3r0r_data.SSHDPort, true)
 }
 
 // GetTargetFromIndex find target from Targets via control index, return nil if not found
@@ -350,7 +369,9 @@ func SetAgentLabel(a *emp3r0r_data.SystemInfo, mutex *sync.Mutex) (label string)
 		if a.Tag == labeled.Tag {
 			mutex.Lock()
 			defer mutex.Unlock()
-			Targets[a].Label = labeled.Label
+			if Targets[a] != nil {
+				Targets[a].Label = labeled.Label
+			}
 			label = labeled.Label
 			return
 		}
