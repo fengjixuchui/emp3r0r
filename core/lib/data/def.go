@@ -62,6 +62,9 @@ var (
 	// UtilsPath binary path of utilities
 	UtilsPath = AgentRoot + "/bin"
 
+	// LibPath
+	LibPath = AgentRoot + "/lib"
+
 	// DefaultShell the shell to use, use static bash binary when possible
 	DefaultShell = UtilsPath + "/bash"
 
@@ -139,7 +142,6 @@ const (
 	ModGET_ROOT     = "get_root"
 	ModREVERSEPROXY = "reverse_proxy"
 	ModGDB          = "gdbserver"
-	ModBettercap    = "bettercap"
 )
 
 // PersistMethods CC calls one of these methods to get persistence, or all of them at once
@@ -165,7 +167,6 @@ var ModuleComments = map[string]string{
 	ModINJECTOR:     "Inject shellcode/loader.so into a running process",
 	ModGET_ROOT:     "Try some built-in LPE exploits",
 	ModREVERSEPROXY: "Manually proxy agents who are unable to use our forward proxy",
-	ModBettercap:    "Remote bettercap, offered as an interactive shell",
 	ModGDB:          "Remote gdbserver, debug anything",
 }
 
@@ -202,10 +203,25 @@ var ModuleHelp = map[string]map[string]string{
 	ModREVERSEPROXY: {
 		"addr": "Target host to proxy, we will connect to it and proxy it out",
 	},
-	ModBettercap: {
-		"args": "Command line args for bettercap",
-	},
 }
+
+// C2Commands
+const (
+	C2CmdCleanLog      = "!clean_log"
+	C2CmdUpdateAgent   = "!upgrade_agent"
+	C2CmdGetRoot       = "!get_root"
+	C2CmdPersistence   = "!persistence"
+	C2CmdCustomModule  = "!custom_module"
+	C2CmdInject        = "!inject"
+	C2CmdUtils         = "!utils"
+	C2CmdDeletePortFwd = "!delete_portfwd"
+	C2CmdPortFwd       = "!port_fwd"
+	C2CmdProxy         = "!proxy"
+	C2CmdSSHD          = "!sshd"
+	C2CmdLPE           = "!lpe"
+	C2CmdReverseProxy  = "!" + ModREVERSEPROXY
+	C2CmdStat          = "!stat"
+)
 
 // Config build.json config file
 type Config struct {
