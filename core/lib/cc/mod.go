@@ -185,16 +185,11 @@ func UpdateOptions(modName string) (exist bool) {
 
 	default:
 		// custom modules
-		for arg := range emp3r0r_data.ModuleHelp[modName] {
-			argOpt := addIfNotFound(arg)
+		modconfig := ModuleConfigs[modName]
+		for opt, val_help := range modconfig.Options {
+			argOpt := addIfNotFound(opt)
 
-			// read default values
-			modConf, exist := ModuleConfigs[modName]
-			if !exist {
-				continue
-			}
-			val := modConf.Options[arg][0]
-			argOpt.Val = val
+			argOpt.Val = val_help[0]
 		}
 	}
 
@@ -252,7 +247,13 @@ func SelectCurrentTarget() (target *emp3r0r_data.SystemInfo) {
 }
 
 // search modules, powered by fuzzysearch
-func ModuleSearch(query string) {
+func ModuleSearch(cmd string) {
+	cmdSplit := strings.Fields(cmd)
+	if len(cmdSplit) < 2 {
+		CliPrintError("search <module keywords>")
+		return
+	}
+	query := strings.Join(cmdSplit[1:], " ")
 	result := fuzzy.Find(query, ModuleNames)
 	CliPrintInfo("\n%s\n", strings.Join(result, "\n"))
 }

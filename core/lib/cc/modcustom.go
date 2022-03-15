@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
+	"os"
 	"strconv"
 	"strings"
 	"time"
@@ -176,6 +177,10 @@ func ModuleDetails(modName string) {
 // scan custom modules in ModuleDir,
 // and update ModuleHelpers, ModuleDocs
 func InitModules() {
+	if !util.IsFileExist(WWWRoot) {
+		os.MkdirAll(WWWRoot, 0700)
+	}
+
 	dirs, err := ioutil.ReadDir(ModuleDir)
 	if err != nil {
 		CliPrintError("Failed to scan custom modules: %v", err)
@@ -246,7 +251,7 @@ func readModCondig(file string) (pconfig *ModConfig, err error) {
 func genStartScript(config *ModConfig, outfile string) (err error) {
 	data := "chmod 755 ./*\n" // make things executable
 	for opt, val_help := range config.Options {
-		data = fmt.Sprintf("%s %s=%s ", data, opt, val_help[0])
+		data = fmt.Sprintf("%s %s='%s' ", data, opt, val_help[0])
 	}
 	data = fmt.Sprintf("%s ./%s ", data, config.Exec) // run with environment vars
 
@@ -255,11 +260,13 @@ func genStartScript(config *ModConfig, outfile string) (err error) {
 }
 
 func updateModuleHelp(config *ModConfig) error {
+	help_map := make(map[string]string)
 	for opt, val_help := range config.Options {
 		if len(val_help) < 2 {
 			return fmt.Errorf("%s config error: %s incomplete", config.Name, opt)
 		}
-		emp3r0r_data.ModuleHelp[config.Name] = map[string]string{opt: val_help[1]}
+		help_map[opt] = val_help[1]
+		emp3r0r_data.ModuleHelp[config.Name] = help_map
 	}
 	return nil
 }
