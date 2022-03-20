@@ -51,8 +51,8 @@ var CmdFuncs = map[string]func(){
 	"info":          CliListOptions,
 	"run":           ModuleRun,
 	"screenshot":    TakeScreenshot,
-	"gen_agent":     BuildAgent,
 	"upgrade_agent": UpgradeAgent,
+	"gen_agent":     GenAgent,
 	"suicide":       Suicide,
 }
 
@@ -138,7 +138,8 @@ func CmdHandler(cmd string) (err error) {
 			CliPrintWarning("Exec: %s on %s", strconv.Quote(cmd), strconv.Quote(CurrentTarget.Tag))
 			SendCmdToCurrentTarget(cmd, "")
 			return
-		} else if CurrentTarget == nil {
+		}
+		if CurrentTarget == nil && helper_w_arg == nil {
 			CliPrintError("No agent selected, try `target <index>`")
 			return
 		}
@@ -253,7 +254,7 @@ func setCurrentTarget(cmd string) {
 			}
 			AgentShellPane = nil
 		}
-		SSHClient("bash", "", emp3r0r_data.SSHDPort, true)
+		SSHClient("bash", "", RuntimeConfig.SSHDPort, true)
 	}
 
 	if target_to_set == nil {

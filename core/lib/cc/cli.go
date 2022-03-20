@@ -11,6 +11,7 @@ import (
 	"strconv"
 	"strings"
 
+	cowsay "github.com/Code-Hex/Neo-cowsay/v2"
 	"github.com/bettercap/readline"
 	"github.com/fatih/color"
 	emp3r0r_data "github.com/jm33-m0/emp3r0r/core/lib/data"
@@ -109,7 +110,6 @@ func CliMain() {
 		}
 		CmdCompls = append(CmdCompls, readline.PcItem(cmd))
 	}
-	CmdCompls = append(CmdCompls, readline.PcItemDynamic(listFiles("./")))
 	CliCompleter.SetChildren(CmdCompls)
 
 	// prompt setup
@@ -125,7 +125,7 @@ func CliMain() {
 	// set up readline instance
 	EmpReadLine, err = readline.NewEx(&readline.Config{
 		Prompt:          EmpPrompt,
-		HistoryFile:     "./emp3r0r.history",
+		HistoryFile:     "./.emp3r0r.history",
 		AutoComplete:    CliCompleter,
 		InterruptPrompt: "^C\nExiting...\n",
 		EOFPrompt:       "^D\nExiting...\n",
@@ -373,6 +373,37 @@ func CliPrintError(format string, a ...interface{}) {
 	}
 }
 
+// CliAsk prompt for an answer from user
+func CliAsk(prompt string) (answer string) {
+	// if there's no way to show prompt
+	if IsAPIEnabled {
+		return "No terminal available"
+	}
+
+	EmpReadLine.SetPrompt(color.HiCyanString(prompt))
+	EmpReadLine.Config.EOFPrompt = ""
+	EmpReadLine.Config.InterruptPrompt = ""
+
+	defer EmpReadLine.SetPrompt(EmpPrompt)
+
+	var err error
+	for {
+		answer, err = EmpReadLine.Readline()
+		if err != nil {
+			if err == readline.ErrInterrupt || err == io.EOF {
+				continue
+			}
+			CliPrintError("CliAsk: %v", err)
+		}
+		answer = strings.TrimSpace(answer)
+		if answer != "" {
+			break
+		}
+	}
+
+	return
+}
+
 // CliYesNo prompt for a y/n answer from user
 func CliYesNo(prompt string) bool {
 	// always return true if there's no way to show prompt
@@ -380,7 +411,7 @@ func CliYesNo(prompt string) bool {
 		return true
 	}
 
-	EmpReadLine.SetPrompt(color.CyanString(prompt + "? [y/N] "))
+	EmpReadLine.SetPrompt(color.HiCyanString(prompt + "? [y/N] "))
 	EmpReadLine.Config.EOFPrompt = ""
 	EmpReadLine.Config.InterruptPrompt = ""
 
@@ -437,7 +468,19 @@ func CliBanner() error {
 	}
 
 	color.Cyan(string(data))
-	color.Cyan("version: %s\n\n", emp3r0r_data.Version)
+	cow, err := cowsay.New(
+		cowsay.BallonWidth(40),
+		cowsay.Random(),
+	)
+	if err != nil {
+		log.Fatalf("CowSay: %v", err)
+	}
+	say, err := cow.Say(fmt.Sprintf("welcome! you are using version %s, C2 listening on *:%s",
+		emp3r0r_data.Version, RuntimeConfig.CCPort))
+	if err != nil {
+		log.Fatalf("CowSay: %v", err)
+	}
+	color.Cyan("%s\n\n", say)
 	return nil
 }
 
@@ -504,8 +547,8 @@ ICAgICDilpPilpMg4paT4paTICAg4paT4paTIOKWk+KWk+KWk+KWkyAg4paT4paTIOKWk+KWkyAg
 IOKWk+KWkwrilojilojilojilojilojilojilogg4paI4paIICAgICAg4paI4paIIOKWiOKWiCAg
 ICAgIOKWiOKWiOKWiOKWiOKWiOKWiCAg4paI4paIICAg4paI4paIICDilojilojilojilojiloji
 loggIOKWiOKWiCAgIOKWiOKWiAoKCmEgbGludXggcG9zdC1leHBsb2l0YXRpb24gZnJhbWV3b3Jr
-IG1hZGUgYnkgbGludXggdXNlcgoKYnkgam0zMy1uZwoKaHR0cHM6Ly9naXRodWIuY29tL2ptMzMt
-bTAvZW1wM3IwcgoKCg==
+IG1hZGUgYnkgbGludXggdXNlcgoKaHR0cHM6Ly9naXRodWIuY29tL2ptMzMtbTAvZW1wM3IwcgoK
+Cg==
 `
 
 // autocomplete module options

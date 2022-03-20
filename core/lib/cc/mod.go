@@ -19,7 +19,7 @@ var (
 	// ModuleDir stores custom modules
 	// cc binary is saved as `./core/build/cc`,
 	// and modules are stored in `./core/modules`
-	ModuleDir = "../modules/"
+	ModuleDir = EmpRoot + "/modules/"
 
 	// CurrentMod selected module
 	CurrentMod = "<blank>"
@@ -123,9 +123,9 @@ func UpdateOptions(modName string) (exist bool) {
 		argsOpt.Val = ""
 		portOpt := addIfNotFound("port")
 		portOpt.Vals = []string{
-			emp3r0r_data.SSHDPort, "22222",
+			RuntimeConfig.SSHDPort, "22222",
 		}
-		portOpt.Val = emp3r0r_data.SSHDPort
+		portOpt.Val = RuntimeConfig.SSHDPort
 
 	case modName == emp3r0r_data.ModPORT_FWD:
 		// rport

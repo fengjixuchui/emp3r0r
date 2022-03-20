@@ -124,7 +124,7 @@ func moduleCustom() {
 
 			// do it
 			err := SSHClient(fmt.Sprintf("%s/%s/%s",
-				emp3r0r_data.AgentRoot, CurrentMod, config.Exec),
+				RuntimeConfig.AgentRoot, CurrentMod, config.Exec),
 				args, port, false)
 			if err != nil {
 				CliPrintError("module %s: %v", config.Name, err)
@@ -249,7 +249,7 @@ func readModCondig(file string) (pconfig *ModConfig, err error) {
 
 // genStartScript read config.json of a module
 func genStartScript(config *ModConfig, outfile string) (err error) {
-	data := "chmod 755 ./*\n" // make things executable
+	data := ""
 	for opt, val_help := range config.Options {
 		data = fmt.Sprintf("%s %s='%s' ", data, opt, val_help[0])
 	}
