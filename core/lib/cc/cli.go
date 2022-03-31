@@ -15,6 +15,8 @@ import (
 	"github.com/bettercap/readline"
 	"github.com/fatih/color"
 	emp3r0r_data "github.com/jm33-m0/emp3r0r/core/lib/data"
+	"github.com/jm33-m0/emp3r0r/core/lib/tun"
+	"github.com/jm33-m0/emp3r0r/core/lib/util"
 	"github.com/olekukonko/tablewriter"
 )
 
@@ -284,7 +286,8 @@ func CliPrintWarning(format string, a ...interface{}) {
 
 // CliMsg print log in cyan, regardless of debug level
 func CliMsg(format string, a ...interface{}) {
-	log.Println(color.CyanString(format, a...))
+	msg_color := color.New(color.Bold, color.FgCyan)
+	log.Println(msg_color.Sprintf(format, a...))
 	if IsAPIEnabled {
 		// send to socket
 		var resp APIResponse
@@ -346,6 +349,29 @@ func CliPrintSuccess(format string, a ...interface{}) {
 		_, err = APIConn.Write([]byte(data))
 		if err != nil {
 			log.Printf("CliPrintSuccess: %v", err)
+		}
+	}
+}
+
+// CliFatalError print log in red, and exit
+func CliFatalError(format string, a ...interface{}) {
+	errorColor := color.New(color.Bold, color.FgHiRed)
+	log.Fatal(errorColor.Sprintf(format, a...))
+	if IsAPIEnabled {
+		// send to socket
+		var resp APIResponse
+		msg := GetDateTime() + " ERROR: " + fmt.Sprintf(format, a...)
+		resp.MsgData = []byte(msg)
+		resp.Alert = true
+		resp.MsgType = LOG
+		data, err := json.Marshal(resp)
+		if err != nil {
+			log.Printf("CliPrintError: %v", err)
+			return
+		}
+		_, err = APIConn.Write([]byte(data))
+		if err != nil {
+			log.Printf("CliPrintError: %v", err)
 		}
 	}
 }
@@ -475,8 +501,15 @@ func CliBanner() error {
 	if err != nil {
 		log.Fatalf("CowSay: %v", err)
 	}
-	say, err := cow.Say(fmt.Sprintf("welcome! you are using version %s, C2 listening on *:%s",
-		emp3r0r_data.Version, RuntimeConfig.CCPort))
+	// C2 names
+	c2_names := tun.NamesInCert(ServerCrtFile)
+	if len(c2_names) <= 0 {
+		CliFatalError("C2 has no names?")
+	}
+	name_list := strings.Join(c2_names, ", ")
+
+	say, err := cow.Say(fmt.Sprintf("welcome! you are using version %s,\nC2 listening on *:%s,\nC2 names: %s",
+		emp3r0r_data.Version, RuntimeConfig.CCPort, name_list))
 	if err != nil {
 		log.Fatalf("CowSay: %v", err)
 	}
@@ -514,6 +547,7 @@ func CliPrettyPrint(header1, header2 string, map2write *map[string]string) {
 	table.SetBorder(true)
 	table.SetRowLine(true)
 	table.SetAutoWrapText(true)
+	table.SetColWidth(20)
 
 	// color
 	table.SetHeaderColor(tablewriter.Colors{tablewriter.Bold, tablewriter.FgCyanColor},
@@ -524,7 +558,8 @@ func CliPrettyPrint(header1, header2 string, map2write *map[string]string) {
 
 	// fill table
 	for c1, c2 := range *map2write {
-		tdata = append(tdata, []string{c1, c2})
+		tdata = append(tdata,
+			[]string{util.SplitLongLine(c1, 20), util.SplitLongLine(c2, 20)})
 	}
 	table.AppendBulk(tdata)
 	table.Render()

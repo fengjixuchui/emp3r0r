@@ -47,7 +47,7 @@ var (
 const (
 	// Version hardcoded version string
 	// see https://github.com/googleapis/release-please/blob/f398bdffdae69772c61a82cd7158cca3478c2110/src/updaters/generic.ts#L30
-	Version = "v1.6.12" // x-release-please-version
+	Version = "v1.13.0" // x-release-please-version
 
 	// RShellBufSize buffer size of reverse shell stream
 	RShellBufSize = 128
@@ -168,7 +168,7 @@ type SystemInfo struct {
 	OS          string        `json:"OS"`          // OS name and version
 	Kernel      string        `json:"Kernel"`      // kernel release
 	Arch        string        `json:"Arch"`        // kernel architecture
-	IP          string        `json:"IP"`          // public IP of the target
+	From        string        `json:"From"`        // where the agent is coming from, usually a public IP, or 127.0.0.1
 	IPs         []string      `json:"IPs"`         // IPs that are found on target's NICs
 	ARP         []string      `json:"ARP"`         // ARP table
 	User        string        `json:"User"`        // user account info

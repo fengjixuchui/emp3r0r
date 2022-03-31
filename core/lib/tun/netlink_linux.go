@@ -1,6 +1,7 @@
-package agent
+//go:build linux
+// +build linux
 
-// build +linux
+package tun
 
 import (
 	"fmt"
@@ -11,7 +12,7 @@ import (
 )
 
 // IPr works like `ip r`, covers both IPv4 and IPv6
-func IPr() (routes []string) {
+func crossPlatformIPr() (routes []string) {
 	links := IPLink()
 	if links == nil {
 		return []string{"N/A"}
@@ -66,7 +67,7 @@ func linkIdx2Name(index int) (name string) {
 }
 
 // IPNeigh works like `ip neigh`, dumps ARP cache
-func IPNeigh() []string {
+func crossPlatformIPNeigh() []string {
 	var (
 		mappings  []string
 		neighList []netlink.Neigh

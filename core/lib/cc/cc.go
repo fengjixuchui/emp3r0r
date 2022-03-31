@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"os"
+	"os/user"
 	"strings"
 	"sync"
 
@@ -23,14 +24,23 @@ var (
 	// IsAPIEnabled Indicate whether we are in headless mode
 	IsAPIEnabled = false
 
-	// EmpRoot root directory of emp3r0r
-	EmpRoot, _ = os.Getwd()
+	// Prefix /usr or /usr/local, can be set through $EMP3R0R_PREFIX
+	Prefix = ""
+
+	// EmpWorkSpace workspace directory of emp3r0r
+	EmpWorkSpace = ""
+
+	// EmpDataDir prefix/lib/emp3r0r
+	EmpDataDir = ""
+
+	// EmpBuildDir prefix/lib/emp3r0r/build
+	EmpBuildDir = ""
 
 	// FileGetDir where we save #get files
-	FileGetDir = EmpRoot + "/file-get/"
+	FileGetDir = ""
 
 	// EmpConfigFile emp3r0r.json
-	EmpConfigFile = EmpRoot + "/emp3r0r.json"
+	EmpConfigFile = ""
 
 	// Targets target list, with control (tun) interface
 	Targets = make(map[*emp3r0r_data.SystemInfo]*Control)
@@ -77,27 +87,6 @@ func headlessListTargets() (err error) {
 	return
 }
 
-// Split long lines
-func SplitLongLine(line string, linelen int) (ret string) {
-	if len(line) < linelen {
-		return line
-	}
-	ret = line[:linelen]
-
-	temp := ""
-	for n, c := range line[linelen:] {
-		if n >= linelen && n%linelen == 0 {
-			ret += fmt.Sprintf("\n%s", temp)
-			temp = ""
-		}
-		temp += string(c)
-	}
-	ret += fmt.Sprintf("%s", temp)
-	temp = ""
-
-	return
-}
-
 // ListTargets list currently connected agents
 func ListTargets() {
 	// return JSON data to APIConn in headless mode
@@ -117,6 +106,7 @@ func ListTargets() {
 	table.SetAutoWrapText(true)
 	table.SetAutoFormatHeaders(true)
 	table.SetReflowDuringAutoWrap(true)
+	table.SetColWidth(20)
 
 	// color
 	table.SetHeaderColor(
@@ -156,21 +146,21 @@ func ListTargets() {
 		// info map
 		ips := strings.Join(target.IPs, ",\n")
 		infoMap := map[string]string{
-			"OS":      SplitLongLine(target.OS, 15),
-			"Process": SplitLongLine(procInfo, 15),
-			"User":    SplitLongLine(target.User, 15),
-			"From":    fmt.Sprintf("%s\nvia %s", target.IP, target.Transport),
+			"OS":      util.SplitLongLine(target.OS, 20),
+			"Process": util.SplitLongLine(procInfo, 20),
+			"User":    util.SplitLongLine(target.User, 20),
+			"From":    fmt.Sprintf("%s\nvia %s", target.From, target.Transport),
 			"IPs":     ips,
 		}
 
-		var row = []string{index, label, SplitLongLine(target.Tag, 15),
+		var row = []string{index, label, util.SplitLongLine(target.Tag, 15),
 			infoMap["OS"], infoMap["Process"], infoMap["User"], infoMap["IPs"], infoMap["From"]}
 
 		// is this agent currently selected?
 		if CurrentTarget != nil {
 			if CurrentTarget.Tag == target.Tag {
 				index = color.New(color.FgHiGreen, color.Bold).Sprintf("%d", control.Index)
-				row = []string{index, label, SplitLongLine(target.Tag, 15),
+				row = []string{index, label, util.SplitLongLine(target.Tag, 15),
 					infoMap["OS"], infoMap["Process"], infoMap["User"], infoMap["IPs"], infoMap["From"]}
 
 				// put this row at top
@@ -211,6 +201,7 @@ func GetTargetDetails(target *emp3r0r_data.SystemInfo) {
 	table.SetBorder(true)
 	table.SetRowLine(true)
 	table.SetAutoWrapText(true)
+	table.SetColWidth(20)
 
 	// color
 	table.SetHeaderColor(tablewriter.Colors{tablewriter.Bold, tablewriter.FgHiCyanColor},
@@ -249,7 +240,7 @@ func GetTargetDetails(target *emp3r0r_data.SystemInfo) {
 		"Container": target.Container,
 		"OS":        color.HiWhiteString(target.OS),
 		"Kernel":    color.HiBlueString(target.Kernel) + ", " + color.HiWhiteString(target.Arch),
-		"From":      color.HiYellowString(target.IP) + fmt.Sprintf(" - %s", color.HiGreenString(target.Transport)),
+		"From":      color.HiYellowString(target.From) + fmt.Sprintf(" - %s", color.HiGreenString(target.Transport)),
 		"IPs":       color.BlueString(ips),
 		"ARP":       color.HiWhiteString(arpTab),
 	}
@@ -261,7 +252,7 @@ func GetTargetDetails(target *emp3r0r_data.SystemInfo) {
 
 	indexRow := []string{"Index", color.HiMagentaString("%d", control.Index)}
 	labelRow := []string{"Label", color.HiCyanString(control.Label)}
-	tagRow := []string{"Tag", color.CyanString(SplitLongLine(target.Tag, 20))}
+	tagRow := []string{"Tag", color.CyanString(util.SplitLongLine(target.Tag, 20))}
 	tdata = append(tdata, indexRow)
 	tdata = append(tdata, labelRow)
 	tdata = append(tdata, tagRow)
@@ -419,5 +410,50 @@ func Send2Agent(data *emp3r0r_data.MsgTunData, agent *emp3r0r_data.SystemInfo) (
 	out := json.NewEncoder(ctrl.Conn)
 
 	err = out.Encode(data)
+	return
+}
+
+// DirSetup set workspace, module directories, etc
+func DirSetup() (err error) {
+	// prefix
+	Prefix = os.Getenv("EMP3R0R_PREFIX")
+	if Prefix == "" {
+		Prefix = "/usr/local"
+	}
+	// eg. /usr/local/lib/emp3r0r
+	EmpDataDir = Prefix + "/lib/emp3r0r"
+	EmpBuildDir = EmpDataDir + "/build"
+	CAT = EmpDataDir + "/emp3r0r-cat"
+	if !util.IsFileExist(EmpDataDir) {
+		return fmt.Errorf("emp3r0r is not installed correctly: %s not found", EmpDataDir)
+	}
+	if !util.IsFileExist(CAT) {
+		return fmt.Errorf("emp3r0r is not installed correctly: %s not found", CAT)
+	}
+
+	// set workspace to ~/.emp3r0r
+	u, err := user.Current()
+	if err != nil {
+		return fmt.Errorf("Get current user: %v", err)
+	}
+	EmpWorkSpace = fmt.Sprintf("%s/.emp3r0r", u.HomeDir)
+	if !util.IsFileExist(EmpWorkSpace) {
+		err = os.MkdirAll(EmpWorkSpace, 0700)
+		if err != nil {
+			return fmt.Errorf("mkdir %s: %v", EmpWorkSpace, err)
+		}
+	}
+	FileGetDir = EmpWorkSpace + "/file-get/"
+	EmpConfigFile = EmpWorkSpace + "/emp3r0r.json"
+
+	// cd to workspace
+	err = os.Chdir(EmpWorkSpace)
+	if err != nil {
+		return fmt.Errorf("cd to workspace %s: %v", EmpWorkSpace, err)
+	}
+
+	// Module directories
+	ModuleDirs = []string{EmpDataDir + "/modules", EmpWorkSpace + "/modules"}
+
 	return
 }

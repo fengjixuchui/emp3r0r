@@ -39,6 +39,7 @@ type ModConfig struct {
 	Author        string `json:"author"`      // by whom
 	Date          string `json:"date"`        // when did you write it
 	Comment       string `json:"comment"`     // describe your module in one line
+	Path          string `json:"path"`        // where is this module stored? eg. ~/.emp3r0r/modules
 
 	// option: [value, help]
 	// eg.
@@ -85,7 +86,8 @@ func moduleCustom() {
 		// compress module files
 		tarball := WWWRoot + CurrentMod + ".tar.bz2"
 		CliPrintInfo("Compressing %s with bz2...", CurrentMod)
-		err = util.TarBz2(ModuleDir+CurrentMod, tarball)
+		path := fmt.Sprintf("%s/%s", config.Path, CurrentMod)
+		err = util.TarBz2(path, tarball)
 		if err != nil {
 			CliPrintError("Compressing %s: %v", CurrentMod, err)
 			return
@@ -104,8 +106,7 @@ func moduleCustom() {
 		if config.IsInteractive {
 			opt, exits := config.Options["args"]
 			if !exits {
-				CliPrintError("Please include `args` in module config file")
-				return
+				config.Options["args"] = []string{"--", "No args"}
 			}
 			args := opt[0]
 			port := strconv.Itoa(util.RandInt(1024, 65535))
@@ -149,6 +150,7 @@ func ModuleDetails(modName string) {
 	table.SetBorder(true)
 	table.SetRowLine(true)
 	table.SetAutoWrapText(true)
+	table.SetColWidth(20)
 
 	// color
 	table.SetHeaderColor(tablewriter.Colors{tablewriter.Bold, tablewriter.FgCyanColor},
@@ -181,12 +183,6 @@ func InitModules() {
 		os.MkdirAll(WWWRoot, 0700)
 	}
 
-	dirs, err := ioutil.ReadDir(ModuleDir)
-	if err != nil {
-		CliPrintError("Failed to scan custom modules: %v", err)
-		return
-	}
-
 	// get vaccine ready
 	if !util.IsFileExist(UtilsArchive) {
 		err = CreateVaccineArchive()
@@ -195,35 +191,56 @@ func InitModules() {
 		}
 	}
 
-	for _, dir := range dirs {
-		if !dir.IsDir() {
-			continue
+	load_mod := func(mod_dir string) {
+		// don't bother if module dir not found
+		if !util.IsFileExist(mod_dir) {
+			return
 		}
-		config_file := ModuleDir + dir.Name() + "/config.json"
-		if !util.IsFileExist(config_file) {
-			continue
-		}
-		config, err := readModCondig(config_file)
+		CliPrintInfo("Scanning %s for modules", mod_dir)
+		dirs, err := ioutil.ReadDir(mod_dir)
 		if err != nil {
-			CliPrintWarning("Reading config from %s: %v", dir.Name(), err)
-			continue
+			CliPrintError("Failed to scan custom modules: %v", err)
+			return
+		}
+		for _, dir := range dirs {
+			if !dir.IsDir() {
+				continue
+			}
+			config_file := fmt.Sprintf("%s/%s/config.json", mod_dir, dir.Name())
+			if !util.IsFileExist(config_file) {
+				continue
+			}
+			config, err := readModCondig(config_file)
+			if err != nil {
+				CliPrintWarning("Reading config from %s: %v", dir.Name(), err)
+				continue
+			}
+
+			// module path, eg. ~/.emp3r0r/modules
+			config.Path = mod_dir
+
+			ModuleHelpers[config.Name] = moduleCustom
+			emp3r0r_data.ModuleComments[config.Name] = config.Comment
+
+			err = updateModuleHelp(config)
+			if err != nil {
+				CliPrintWarning("Loading config from %s: %v", config.Name, err)
+				continue
+			}
+			ModuleConfigs[config.Name] = *config
+			CliPrintInfo("Loaded module %s", strconv.Quote(config.Name))
 		}
 
-		ModuleHelpers[config.Name] = moduleCustom
-		emp3r0r_data.ModuleComments[config.Name] = config.Comment
-
-		err = updateModuleHelp(config)
-		if err != nil {
-			CliPrintWarning("Loading config from %s: %v", config.Name, err)
-			continue
+		// make []string for fuzzysearch
+		for name, comment := range emp3r0r_data.ModuleComments {
+			ModuleNames = append(ModuleNames, fmt.Sprintf("%s: %s", color.HiBlueString(name), comment))
 		}
-		ModuleConfigs[config.Name] = *config
-		CliPrintInfo("Loaded module %s", strconv.Quote(config.Name))
+
 	}
 
-	// make []string for fuzzysearch
-	for name, comment := range emp3r0r_data.ModuleComments {
-		ModuleNames = append(ModuleNames, fmt.Sprintf("%s: %s", color.HiBlueString(name), comment))
+	// read from every defined module dir
+	for _, mod_dir := range ModuleDirs {
+		load_mod(mod_dir)
 	}
 
 	CliPrintInfo("Loaded %d modules", len(ModuleHelpers))

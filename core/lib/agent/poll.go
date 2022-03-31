@@ -1,6 +1,3 @@
-//go:build linux
-// +build linux
-
 package agent
 
 import (
@@ -144,14 +141,14 @@ func CCMsgTun(ctx context.Context, cancel context.CancelFunc) (err error) {
 				break
 			}
 			payload := msg.Payload
-			if payload == "hello" {
+			if strings.HasPrefix(payload, "hello") {
 				continue
 			}
 
 			// process CC data
 			go processCCData(&msg)
 		}
-		log.Println("check CC response: exited")
+		log.Println("Check CC response: exited")
 	}()
 
 	sendHello := func(cnt int) bool {
@@ -160,12 +157,12 @@ func CCMsgTun(ctx context.Context, cancel context.CancelFunc) (err error) {
 			cnt-- // consume cnt
 
 			// send hello
-			msg.Payload = "hello"
+			msg.Payload = "hello" + util.RandStr(util.RandInt(1, 100))
 			msg.Tag = RuntimeConfig.AgentTag
 			err = out.Encode(msg)
 			if err != nil {
 				log.Printf("agent cannot connect to cc: %v", err)
-				util.TakeASnap()
+				util.TakeABlink()
 				continue
 			}
 			return true
@@ -175,7 +172,6 @@ func CCMsgTun(ctx context.Context, cancel context.CancelFunc) (err error) {
 
 	// send hello every second
 	for ctx.Err() == nil {
-		util.TakeASnap()
 		if !sendHello(util.RandInt(1, 10)) {
 			log.Print("sendHello failed")
 			break
@@ -184,6 +180,7 @@ func CCMsgTun(ctx context.Context, cancel context.CancelFunc) (err error) {
 		if err != nil {
 			log.Printf("Updating agent sysinfo: %v", err)
 		}
+		util.TakeASnap()
 	}
 
 	if err == nil {

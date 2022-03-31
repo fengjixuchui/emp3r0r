@@ -1,5 +1,218 @@
 # Changelog
 
+## [1.13.0](https://github.com/jm33-m0/emp3r0r/compare/v1.12.0...v1.13.0) (2022-03-31)
+
+
+### Features
+
+* add KCP C2 transport ([d33c9a1](https://github.com/jm33-m0/emp3r0r/commit/d33c9a102424067f90eee6a9fb79972df3c0ef71))
+* add KCP transport, C2 traffic in obfuscated and fast UDP ([024543e](https://github.com/jm33-m0/emp3r0r/commit/024543efd03884343560c475990ad07f5743d208))
+
+## [1.12.0](https://github.com/jm33-m0/emp3r0r/compare/v1.11.0...v1.12.0) (2022-03-30)
+
+
+### Features
+
+* randomize heartbeat payload length ([920d01d](https://github.com/jm33-m0/emp3r0r/commit/920d01dfe3fbb77edf8245c4b8d88624178b8d52))
+* reduce and randomize C2 heart-beat traffic, may cause longer wait time in agent state checking ([dee4b30](https://github.com/jm33-m0/emp3r0r/commit/dee4b30e4bd696b46c044386d219040715ad35ad))
+
+
+### Bug Fixes
+
+* agent does not connect immediately after checking in ([afa4bff](https://github.com/jm33-m0/emp3r0r/commit/afa4bff4b54807a991c6d364b1384a6d6cdf54bf))
+* agent re-connection takes too long ([4febec6](https://github.com/jm33-m0/emp3r0r/commit/4febec6c7add168919f957cb7808df7c04ac2f10))
+* alert user only when the agent is connected correctly ([44ee708](https://github.com/jm33-m0/emp3r0r/commit/44ee7086340d4c8d36d0be2b6ec28bcfb3bbb705))
+* line wrapping in `CliPrettyPrint` ([f406224](https://github.com/jm33-m0/emp3r0r/commit/f4062247518cda72642b65558743d03d08eac395))
+* line wrapping in agent list brings extra whitespaces ([3a03153](https://github.com/jm33-m0/emp3r0r/commit/3a03153c5f05fda718392661ae30f6c79335f6c5))
+* line wrapping inside tables ([5f6b3db](https://github.com/jm33-m0/emp3r0r/commit/5f6b3db264dcfb93237504c35578049c0db33d81))
+* RandStr not random enough with time.Now as seed ([e3aed62](https://github.com/jm33-m0/emp3r0r/commit/e3aed626744c55b0488a4035ce256aa17f48e6a2))
+* some values in emp3r0r.json are not updated ([70c0f5e](https://github.com/jm33-m0/emp3r0r/commit/70c0f5ec7c6b0dd458b6cbdfeb4489904925bd10))
+
+## [1.11.0](https://github.com/jm33-m0/emp3r0r/compare/v1.10.7...v1.11.0) (2022-03-29)
+
+
+### Features
+
+* add shadowsocks ([a8117e9](https://github.com/jm33-m0/emp3r0r/commit/a8117e97a6c818b9c548bc474027cc47dd24b708))
+* Add Shadowsocks obfuscator to C2 transport ([73a4d67](https://github.com/jm33-m0/emp3r0r/commit/73a4d6782712388e3ee76b9babcfa3b6dc314f30))
+* use upx to further compress packed agent binaries ([1c6800f](https://github.com/jm33-m0/emp3r0r/commit/1c6800ff4a3162c8e64f72f28b78f2582f0e2db7))
+
+
+### Bug Fixes
+
+* `garble -tiny` now works ([3c1b9b3](https://github.com/jm33-m0/emp3r0r/commit/3c1b9b32e1fa4476f7ed6a047689f3c47482879b))
+
+### [1.10.7](https://github.com/jm33-m0/emp3r0r/compare/v1.10.6...v1.10.7) (2022-03-28)
+
+
+### Bug Fixes
+
+* empty envv when started from memfd_exec ([f6a6b7d](https://github.com/jm33-m0/emp3r0r/commit/f6a6b7dfea7f4e09f2b6f136d018c0fe97529072))
+* packer: pass config data and ELF through envv ([b6a0d7b](https://github.com/jm33-m0/emp3r0r/commit/b6a0d7b4d831497e66d46b5d36071e46fb2b6e06))
+
+### [1.10.6](https://github.com/jm33-m0/emp3r0r/compare/v1.10.5...v1.10.6) (2022-03-27)
+
+
+### Bug Fixes
+
+* [#105](https://github.com/jm33-m0/emp3r0r/issues/105) ([32d88f7](https://github.com/jm33-m0/emp3r0r/commit/32d88f72b7b400959e41031414370baa0beba42e))
+* [#105](https://github.com/jm33-m0/emp3r0r/issues/105), show C2 names in cowsay ([d76e7cb](https://github.com/jm33-m0/emp3r0r/commit/d76e7cb6c33de6c4cda989ec516ac2dde919aac5))
+
+### [1.10.5](https://github.com/jm33-m0/emp3r0r/compare/v1.10.4...v1.10.5) (2022-03-26)
+
+
+### Bug Fixes
+
+* PKGBUILD for blackarch ([e496738](https://github.com/jm33-m0/emp3r0r/commit/e4967387f66bfd605b97a8c231631a2abc95506f))
+
+### [1.10.4](https://github.com/jm33-m0/emp3r0r/compare/v1.10.3...v1.10.4) (2022-03-25)
+
+
+### Bug Fixes
+
+* unable to execute cat since `PATH` is not set ([5049837](https://github.com/jm33-m0/emp3r0r/commit/5049837726f009891137364cbabec3533359f7bd))
+
+### [1.10.3](https://github.com/jm33-m0/emp3r0r/compare/v1.10.2...v1.10.3) (2022-03-25)
+
+
+### Bug Fixes
+
+* filename autocompletion for packer ([1a9d180](https://github.com/jm33-m0/emp3r0r/commit/1a9d180e95b83a52d3007880b0d987803b9208be))
+* make packed binaries executable by default ([5d2c944](https://github.com/jm33-m0/emp3r0r/commit/5d2c9448adea5b8f684b8e80cc601f6f962f6b91))
+* packed agent cannot find config data ([e621808](https://github.com/jm33-m0/emp3r0r/commit/e621808bed15ea0ec4189e5c31240b9f31034a4f))
+* packer blocks UI ([6788b35](https://github.com/jm33-m0/emp3r0r/commit/6788b351cae09dd90f6fbe14e9ef6a9cbb27ac66))
+* reduce packer_stub binary size ([c67fff9](https://github.com/jm33-m0/emp3r0r/commit/c67fff9632d2d4f6c9647828731e1e782730dd14))
+* reduce size of data package ([c441325](https://github.com/jm33-m0/emp3r0r/commit/c441325aa23f7b166b2419049163af59a653e83f))
+* unable to extract config data when agent is packed ([c8b5198](https://github.com/jm33-m0/emp3r0r/commit/c8b5198553357ba5fd8c35d159231d0e17fbbee6))
+* unable to extract data from file/mem ([eff9574](https://github.com/jm33-m0/emp3r0r/commit/eff9574417883ec6c8b5820bb0b199acea7806bd))
+* unable to extract embeded json config ([1c80ec8](https://github.com/jm33-m0/emp3r0r/commit/1c80ec869f6dc24fa692d89422c04ac746e970f2))
+
+### [1.10.2](https://github.com/jm33-m0/emp3r0r/compare/v1.10.1...v1.10.2) (2022-03-25)
+
+
+### Bug Fixes
+
+* `emp3r0r --release` fails to build packer_stub ([5dd8f99](https://github.com/jm33-m0/emp3r0r/commit/5dd8f997e249abd84b7128760731ae72e0f42131))
+
+### [1.10.1](https://github.com/jm33-m0/emp3r0r/compare/v1.10.0...v1.10.1) (2022-03-24)
+
+
+### Bug Fixes
+
+* packer_stub.exe path ([7b7a2d7](https://github.com/jm33-m0/emp3r0r/commit/7b7a2d7b49d86dec2948d3de18c66ff918c30c49))
+
+## [1.10.0](https://github.com/jm33-m0/emp3r0r/compare/v1.9.0...v1.10.0) (2022-03-24)
+
+
+### Features
+
+* check if agent is started by ELF loader by PATH hash ([2df3c1d](https://github.com/jm33-m0/emp3r0r/commit/2df3c1d827f5634bc25f2ae9f116bfdfa99e88a4))
+* integrate packer into C2 ([c81cd7d](https://github.com/jm33-m0/emp3r0r/commit/c81cd7dd1e69042fb2fe78964eae3c4884ae6542))
+
+
+### Bug Fixes
+
+* pack_agent command ([7d2dcea](https://github.com/jm33-m0/emp3r0r/commit/7d2dcea321695a52256416a1f29e7fd672953fe4))
+
+## [1.9.0](https://github.com/jm33-m0/emp3r0r/compare/v1.8.1...v1.9.0) (2022-03-23)
+
+
+### Features
+
+* emp3r0r installer ([f126780](https://github.com/jm33-m0/emp3r0r/commit/f12678038a53e12862865b17048e2e7ba69b4ba0))
+* install emp3r0r to your system, load custom modules from ~/.emp3r0r ([77f1564](https://github.com/jm33-m0/emp3r0r/commit/77f1564d9dd556271efb726272278121ad3cd747))
+* use colored print for all fatal errors ([9933d86](https://github.com/jm33-m0/emp3r0r/commit/9933d8635318757ca8d4e477fc3ea66cc013ec8b))
+
+
+### Bug Fixes
+
+* cannot pack custom modules due to incorrect path ([c535350](https://github.com/jm33-m0/emp3r0r/commit/c535350a52f4d6906d8fe1473398636ccd983fd1))
+* emp3r0r launcher/installer path error ([e4e7a91](https://github.com/jm33-m0/emp3r0r/commit/e4e7a91e931ede594aaaaac8320b189546b8ac2d))
+* gen_agent: binaries not found ([31b68d1](https://github.com/jm33-m0/emp3r0r/commit/31b68d13fd0e7d620d920ff46a466692462f6f01))
+* modules don't load ([7bac146](https://github.com/jm33-m0/emp3r0r/commit/7bac14606a9a4df253d210ab29a30c35bde5257c))
+* path errors ([70d8362](https://github.com/jm33-m0/emp3r0r/commit/70d8362fd688d6ab629deac201578c8d27a034e7))
+* set correct location for tmux scripts ([a58c1a3](https://github.com/jm33-m0/emp3r0r/commit/a58c1a3381d905ecf260f1b29f2705e4c2f5b8f2))
+
+### [1.8.1](https://github.com/jm33-m0/emp3r0r/compare/v1.8.0...v1.8.1) (2022-03-22)
+
+
+### Bug Fixes
+
+* 'unknown_host' in agent tag ([1aa8eb4](https://github.com/jm33-m0/emp3r0r/commit/1aa8eb47aa01f0a9a6322d82318e8fb4fd64fec2))
+* no build option for Windows ([9c7d22d](https://github.com/jm33-m0/emp3r0r/commit/9c7d22deea7525e7dd888692716c7495a5c5486b))
+* reduce agent binary size for windows version ([9a486f7](https://github.com/jm33-m0/emp3r0r/commit/9a486f7bf9a0a2647709ee36f7bba8cc5a5939d4))
+
+## [1.8.0](https://github.com/jm33-m0/emp3r0r/compare/v1.7.6...v1.8.0) (2022-03-22)
+
+
+### Features
+
+* Add cross-platform support ([666051d](https://github.com/jm33-m0/emp3r0r/commit/666051dca08804b25ecdd217a003aa72890b8871))
+* recognize more linux distros, and get vendor name ([5f4df0d](https://github.com/jm33-m0/emp3r0r/commit/5f4df0d3c5771bd902edac316150060e92d23236))
+
+
+### Bug Fixes
+
+* remove binary from source tree ([c5955b8](https://github.com/jm33-m0/emp3r0r/commit/c5955b8b89d01c2609028c1f4464d778661adbd9))
+
+### [1.7.6](https://github.com/jm33-m0/emp3r0r/compare/v1.7.5...v1.7.6) (2022-03-20)
+
+
+### Bug Fixes
+
+* ssh shell fails to start due to 'already bind' error ([18004a9](https://github.com/jm33-m0/emp3r0r/commit/18004a9e4641516d3941cde336eb8e970b9bba15))
+* unable to config time intervals ([b242e80](https://github.com/jm33-m0/emp3r0r/commit/b242e80582d1052c663c9e37fe41b6efbbd983e9))
+
+### [1.7.5](https://github.com/jm33-m0/emp3r0r/compare/v1.7.4...v1.7.5) (2022-03-20)
+
+
+### Bug Fixes
+
+* [#89](https://github.com/jm33-m0/emp3r0r/issues/89) ([1e1b838](https://github.com/jm33-m0/emp3r0r/commit/1e1b8380c89effbbdf7d5686147b6666dd1eddfc))
+
+### [1.7.4](https://github.com/jm33-m0/emp3r0r/compare/v1.7.3...v1.7.4) (2022-03-20)
+
+
+### Bug Fixes
+
+* abort when CA is not added ([3edca43](https://github.com/jm33-m0/emp3r0r/commit/3edca43d8d18765dec794f5e5d4368475963d4fd))
+* CA cert missing ([b1885b9](https://github.com/jm33-m0/emp3r0r/commit/b1885b9e81a40fe3072caf15ddd17fb59da35547))
+
+### [1.7.3](https://github.com/jm33-m0/emp3r0r/compare/v1.7.2...v1.7.3) (2022-03-20)
+
+
+### Bug Fixes
+
+* disable CGO to build static binaries ([f12190f](https://github.com/jm33-m0/emp3r0r/commit/f12190f31ab4791f2029a05b9de6c6075c730fdd))
+
+### [1.7.2](https://github.com/jm33-m0/emp3r0r/compare/v1.7.1...v1.7.2) (2022-03-20)
+
+
+### Bug Fixes
+
+* binaries not added in archive ([7383bd7](https://github.com/jm33-m0/emp3r0r/commit/7383bd71b5f82606f58ccbe476335b4f66ebe9cd))
+
+### [1.7.1](https://github.com/jm33-m0/emp3r0r/compare/v1.7.0...v1.7.1) (2022-03-20)
+
+
+### Bug Fixes
+
+* build script typo, archive structure ([ced5651](https://github.com/jm33-m0/emp3r0r/commit/ced56510e4bd82e94894f276c247b345a07150ce))
+
+## [1.7.0](https://github.com/jm33-m0/emp3r0r/compare/v1.6.13...v1.7.0) (2022-03-20)
+
+
+### Features
+
+* improved C2 launcher, auto-build working ([b33aa19](https://github.com/jm33-m0/emp3r0r/commit/b33aa19a05b74ee8a43980ea741c3d953f98cfa0))
+
+### [1.6.13](https://github.com/jm33-m0/emp3r0r/compare/v1.6.12...v1.6.13) (2022-03-20)
+
+
+### Bug Fixes
+
+* upload.sh ([ad2315b](https://github.com/jm33-m0/emp3r0r/commit/ad2315b4efd58a50aa8a43cf0df8c25946f4612d))
+
 ### [1.6.12](https://github.com/jm33-m0/emp3r0r/compare/v1.6.11...v1.6.12) (2022-03-20)
 
 

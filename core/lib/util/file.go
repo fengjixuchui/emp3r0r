@@ -169,10 +169,10 @@ func RandInt(min, max int) int {
 // RandStr random string
 func RandStr(n int) string {
 	var letters = []rune("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ")
-	mathRand.Seed(time.Now().Unix())
+	mathRand.Seed(int64(RandInt(0xff, 0xffffffff)))
 	b := make([]rune, n)
 	for i := range b {
-		b[i] = letters[mathRand.Intn(len(letters))]
+		b[i] = letters[int64(RandInt(0, len(letters)))]
 	}
 	return string(b)
 }
@@ -216,6 +216,10 @@ func FileSize(path string) (size int64) {
 func TarBz2(dir, outfile string) error {
 	// remove outfile
 	os.RemoveAll(outfile)
+
+	if !IsFileExist(dir) {
+		return fmt.Errorf("%s does not exist", dir)
+	}
 
 	// map files on disk to their paths in the archive
 	archive_dir_name := FileBaseName(dir)
@@ -261,4 +265,25 @@ func ReverseString(s string) string {
 
 	// return the reversed string.
 	return string(rns)
+}
+
+// Split long lines
+func SplitLongLine(line string, linelen int) (ret string) {
+	if len(line) < linelen {
+		return line
+	}
+	ret = line[:linelen]
+
+	temp := ""
+	for n, c := range line[linelen:] {
+		if n >= linelen && n%linelen == 0 {
+			ret = fmt.Sprintf("%s\n%s", ret, temp)
+			temp = ""
+		}
+		temp += string(c)
+	}
+	ret = fmt.Sprintf("%s\n%s", ret, temp)
+	temp = ""
+
+	return
 }

@@ -103,6 +103,16 @@ func ProcCmdline(pid int) string {
 	return cmdline
 }
 
+// IsPIDAlive check if a process name exists, returns its process(es)
+func IsPIDAlive(pid int) (alive bool) {
+	alive, err := process.PidExists(int32(pid))
+	if err != nil {
+		log.Printf("IsPIDAlive: %v", err)
+		return false
+	}
+	return
+}
+
 // IsProcAlive check if a process name exists, returns its process(es)
 func IsProcAlive(procName string) (alive bool, procs []*os.Process) {
 	allprocs, err := gops.Processes()
@@ -147,8 +157,14 @@ func PidOf(name string) []int {
 	return pids
 }
 
-// sleep for a random interval
+// sleep for a random interval between 120ms to 120s
 func TakeASnap() {
-	interval := time.Duration(RandInt(100, 2000))
+	interval := time.Duration(RandInt(120, 120000))
+	time.Sleep(interval * time.Millisecond)
+}
+
+// sleep for a random interval between 120ms to 2s
+func TakeABlink() {
+	interval := time.Duration(RandInt(120, 2000))
 	time.Sleep(interval * time.Millisecond)
 }
