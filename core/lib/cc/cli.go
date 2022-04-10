@@ -284,7 +284,7 @@ func CliPrintWarning(format string, a ...interface{}) {
 	}
 }
 
-// CliMsg print log in cyan, regardless of debug level
+// CliMsg print log in bold cyan, regardless of debug level
 func CliMsg(format string, a ...interface{}) {
 	msg_color := color.New(color.Bold, color.FgCyan)
 	log.Println(msg_color.Sprintf(format, a...))
@@ -406,7 +406,7 @@ func CliAsk(prompt string) (answer string) {
 		return "No terminal available"
 	}
 
-	EmpReadLine.SetPrompt(color.HiCyanString(prompt))
+	EmpReadLine.SetPrompt(color.HiMagentaString(prompt))
 	EmpReadLine.Config.EOFPrompt = ""
 	EmpReadLine.Config.InterruptPrompt = ""
 
@@ -437,7 +437,7 @@ func CliYesNo(prompt string) bool {
 		return true
 	}
 
-	EmpReadLine.SetPrompt(color.HiCyanString(prompt + "? [y/N] "))
+	EmpReadLine.SetPrompt(color.HiMagentaString(prompt + "? [y/N] "))
 	EmpReadLine.Config.EOFPrompt = ""
 	EmpReadLine.Config.InterruptPrompt = ""
 
@@ -693,5 +693,24 @@ func AdaptiveTable(tableString string) {
 	row_len := len(strings.Split(tableString, "\n")[0])
 	if CommandPane.Width < row_len {
 		CommandPane.ResizePane("x", row_len)
+	}
+}
+
+func setDebugLevel(cmd string) {
+	cmdSplit := strings.Fields(cmd)
+	if len(cmdSplit) != 2 {
+		CliPrintError("debug <0, 1, 2, 3>")
+		return
+	}
+	level, e := strconv.Atoi(cmdSplit[1])
+	if e != nil {
+		CliPrintError("Invalid debug level: %v", err)
+		return
+	}
+	DebugLevel = level
+	if DebugLevel > 2 {
+		log.SetFlags(log.Ldate | log.Ltime | log.Lmicroseconds | log.Lmsgprefix)
+	} else {
+		log.SetFlags(log.Ldate | log.Ltime | log.LstdFlags)
 	}
 }

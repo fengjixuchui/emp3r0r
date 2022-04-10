@@ -9,6 +9,7 @@ import (
 	"io/ioutil"
 	"log"
 	"os"
+	"runtime"
 
 	emp3r0r_data "github.com/jm33-m0/emp3r0r/core/lib/data"
 	"github.com/jm33-m0/emp3r0r/core/lib/util"
@@ -16,6 +17,10 @@ import (
 )
 
 func VaccineHandler() (out string) {
+	if runtime.GOOS != "linux" {
+		return "Only supported in Linux"
+	}
+
 	var (
 		PythonArchive = RuntimeConfig.UtilsPath + "/python3.9.tar.xz"
 		PythonLib     = RuntimeConfig.UtilsPath + "/python3.9"
@@ -61,7 +66,7 @@ func VaccineHandler() (out string) {
 	}
 
 	// extract python3.9.tar.xz
-	log.Printf("Python environment: %s, %s, %s", PythonArchive, PythonLib, PythonPath)
+	log.Printf("Pre-set Python environment: %s, %s, %s", PythonArchive, PythonLib, PythonPath)
 	os.RemoveAll(PythonLib)
 	if util.IsFileExist(PythonArchive) {
 		log.Printf("Found python archive at %s, trying to configure", PythonArchive)
@@ -75,6 +80,7 @@ func VaccineHandler() (out string) {
 		if err != nil {
 			out = fmt.Sprintf("Write python launcher: %v", err)
 		}
+		log.Println("Python configured")
 	}
 	os.Remove(RuntimeConfig.AgentRoot + "/utils.tar.bz2")
 

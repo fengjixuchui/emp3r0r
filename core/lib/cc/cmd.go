@@ -1,7 +1,6 @@
 package cc
 
 import (
-	"log"
 	"strconv"
 	"strings"
 	"sync"
@@ -173,25 +172,6 @@ func CmdHelp(mod string) {
 	CliPrintError("Help yourself")
 }
 
-func setDebugLevel(cmd string) {
-	cmdSplit := strings.Fields(cmd)
-	if len(cmdSplit) != 2 {
-		CliPrintError("debug <0, 1, 2, 3>")
-		return
-	}
-	level, e := strconv.Atoi(cmdSplit[1])
-	if e != nil {
-		CliPrintError("Invalid debug level: %v", err)
-		return
-	}
-	DebugLevel = level
-	if DebugLevel > 2 {
-		log.SetFlags(log.Ldate | log.Ltime | log.Lmicroseconds | log.Llongfile | log.Lmsgprefix)
-	} else {
-		log.SetFlags(log.Ldate | log.Ltime | log.LstdFlags)
-	}
-}
-
 func vimEditFile(cmd string) {
 	cmdSplit := strings.Fields(cmd)
 	if len(cmdSplit) < 2 {
@@ -230,7 +210,7 @@ func setCurrentTarget(cmd string) {
 		return
 	}
 	defer SetDynamicPrompt()
-	var target_to_set *emp3r0r_data.SystemInfo
+	var target_to_set *emp3r0r_data.AgentSystemInfo
 
 	// select by tag or index
 	target_to_set = GetTargetFromTag(strings.Join(cmdSplit[1:], " "))
@@ -241,7 +221,7 @@ func setCurrentTarget(cmd string) {
 		}
 	}
 
-	select_agent := func(a *emp3r0r_data.SystemInfo) {
+	select_agent := func(a *emp3r0r_data.AgentSystemInfo) {
 		CurrentTarget = a
 		GetTargetDetails(CurrentTarget)
 		CliPrintSuccess("Now targeting %s", CurrentTarget.Tag)
@@ -282,7 +262,7 @@ func setTargetLabel(cmd string) {
 	index, e := strconv.Atoi(cmdSplit[1])
 	label := strings.Join(cmdSplit[2:], " ")
 
-	var target *emp3r0r_data.SystemInfo
+	var target *emp3r0r_data.AgentSystemInfo
 	if e != nil {
 		target = GetTargetFromTag(cmdSplit[1])
 		if target != nil {

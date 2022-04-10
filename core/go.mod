@@ -4,11 +4,13 @@ go 1.18
 
 require (
 	github.com/Code-Hex/Neo-cowsay/v2 v2.0.4
+	github.com/Microsoft/go-winio v0.5.2
 	github.com/bettercap/readline v0.0.0-20210228151553-655e48bcb7bf
 	github.com/cavaliergopher/grab/v3 v3.0.1
 	github.com/creack/pty v1.1.18
 	github.com/fatih/color v1.13.0
 	github.com/gliderlabs/ssh v0.3.3
+	github.com/gonutz/w32/v2 v2.4.0
 	github.com/google/uuid v1.3.0
 	github.com/gorilla/mux v1.8.0
 	github.com/jaypipes/ghw v0.9.0

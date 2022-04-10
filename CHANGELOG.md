@@ -1,5 +1,117 @@
 # Changelog
 
+### [1.15.6](https://github.com/jm33-m0/emp3r0r/compare/v1.15.5...v1.15.6) (2022-04-10)
+
+
+### Bug Fixes
+
+* windows sysinfo ([8c7c080](https://github.com/jm33-m0/emp3r0r/commit/8c7c080235f54f3f6c6e5234fb54084b7d805d3b))
+
+### [1.15.5](https://github.com/jm33-m0/emp3r0r/compare/v1.15.4...v1.15.5) (2022-04-09)
+
+
+### Bug Fixes
+
+* `interactive_shell` for Windows: fails to find shell process sometimes ([bf1883d](https://github.com/jm33-m0/emp3r0r/commit/bf1883d17bfb133d73870f3d6e7fdcd8c75a24e4))
+* `interactive_shell` for Windows: too many callback functions ([1f0155b](https://github.com/jm33-m0/emp3r0r/commit/1f0155b34715bcf6ce04206dc18699d4e04e429e))
+
+### [1.15.4](https://github.com/jm33-m0/emp3r0r/compare/v1.15.3...v1.15.4) (2022-04-08)
+
+
+### Bug Fixes
+
+* [#122](https://github.com/jm33-m0/emp3r0r/issues/122) window resizing now works mostly ([bb1af5d](https://github.com/jm33-m0/emp3r0r/commit/bb1af5d694c685982190c24bd6b9351c482c62fa))
+
+### [1.15.3](https://github.com/jm33-m0/emp3r0r/compare/v1.15.2...v1.15.3) (2022-04-07)
+
+
+### Bug Fixes
+
+* [#122](https://github.com/jm33-m0/emp3r0r/issues/122) partially fix, shell window in main tmux pane now works ([17141b8](https://github.com/jm33-m0/emp3r0r/commit/17141b84c46f4986c7baf8fee9213d8478d1f6d0))
+
+### [1.15.2](https://github.com/jm33-m0/emp3r0r/compare/v1.15.1...v1.15.2) (2022-04-06)
+
+
+### Bug Fixes
+
+* windows `interactive_shell` has visible console windows ([4dfd893](https://github.com/jm33-m0/emp3r0r/commit/4dfd8938645827d6ffdd731ffb1601dadaf6d7f9))
+
+### [1.15.1](https://github.com/jm33-m0/emp3r0r/compare/v1.15.0...v1.15.1) (2022-04-06)
+
+
+### Bug Fixes
+
+* [#94](https://github.com/jm33-m0/emp3r0r/issues/94) windows support now complete ([d7b812d](https://github.com/jm33-m0/emp3r0r/commit/d7b812df0a5a77aec24c58df99f6b3bf925c8b2b))
+
+## [1.15.0](https://github.com/jm33-m0/emp3r0r/compare/v1.14.7...v1.15.0) (2022-04-04)
+
+
+### Features
+
+* remove agent on command exec timeout ([97eacdb](https://github.com/jm33-m0/emp3r0r/commit/97eacdbf7841b314062fbcb6148463b1018ff1bd))
+
+### [1.14.7](https://github.com/jm33-m0/emp3r0r/compare/v1.14.6...v1.14.7) (2022-04-02)
+
+
+### Bug Fixes
+
+* [#118](https://github.com/jm33-m0/emp3r0r/issues/118) implement a 2min timeout in C&C tun ([2ecccf6](https://github.com/jm33-m0/emp3r0r/commit/2ecccf60db1966fe83e8c5006618da02b4b20356))
+
+### [1.14.6](https://github.com/jm33-m0/emp3r0r/compare/v1.14.5...v1.14.6) (2022-04-02)
+
+
+### Bug Fixes
+
+* `cc_indicator` option not covered by `gen_agent` ([374ad67](https://github.com/jm33-m0/emp3r0r/commit/374ad67677d0d50fb368754e0513d11916c944b4))
+* logging level in checkinHandler ([ea06c68](https://github.com/jm33-m0/emp3r0r/commit/ea06c68084b803b2a0ae7caa444df321d93d5361))
+
+### [1.14.5](https://github.com/jm33-m0/emp3r0r/compare/v1.14.4...v1.14.5) (2022-04-01)
+
+
+### Bug Fixes
+
+* address [#45](https://github.com/jm33-m0/emp3r0r/issues/45), do not start socks5 proxy unless told to ([e9deb8e](https://github.com/jm33-m0/emp3r0r/commit/e9deb8e402dbc5147b3d89eda8d31333d65d5756))
+
+### [1.14.4](https://github.com/jm33-m0/emp3r0r/compare/v1.14.3...v1.14.4) (2022-04-01)
+
+
+### Bug Fixes
+
+* `garble -tiny build` in build script ([b643875](https://github.com/jm33-m0/emp3r0r/commit/b6438756aa6a7433b703c787593504661b6b8175))
+
+### [1.14.3](https://github.com/jm33-m0/emp3r0r/compare/v1.14.2...v1.14.3) (2022-04-01)
+
+
+### Bug Fixes
+
+* vaccine fails to configure on agent start ([c74e7fb](https://github.com/jm33-m0/emp3r0r/commit/c74e7fb8611f767807a8fde3a2fa73fced741c12))
+
+### [1.14.2](https://github.com/jm33-m0/emp3r0r/compare/v1.14.1...v1.14.2) (2022-04-01)
+
+
+### Bug Fixes
+
+* `emp3r0r --release` cannot build agent stub ([a277515](https://github.com/jm33-m0/emp3r0r/commit/a277515557c8c1fab3ecd7a971cff71a1981bf1d))
+
+### [1.14.1](https://github.com/jm33-m0/emp3r0r/compare/v1.14.0...v1.14.1) (2022-04-01)
+
+
+### Bug Fixes
+
+* agent not reconnecting immediately after losing connection ([59eaa1f](https://github.com/jm33-m0/emp3r0r/commit/59eaa1ff6b64f4d07fc84db31a468276ba833102))
+* ConnectCC stucks when using KCP ([58d5f89](https://github.com/jm33-m0/emp3r0r/commit/58d5f89aa0506c95f1d29824046979ab2026393b))
+* ConnectCC timeout not implemented correctly ([d58ac5e](https://github.com/jm33-m0/emp3r0r/commit/d58ac5eaed680ab591091f920a39d801cba1b090))
+* KCPClient crash ([f5202ef](https://github.com/jm33-m0/emp3r0r/commit/f5202ef5c6d70279c096cf4a5be55af12c9f2782))
+* KCPClient not aware of C2 disconnection ([58a63a2](https://github.com/jm33-m0/emp3r0r/commit/58a63a22d70877f3aee0ea71b49e502db2245257))
+* timeout TLS handshake, do not wait infinitely ([24dd54f](https://github.com/jm33-m0/emp3r0r/commit/24dd54f96a7c83f8439394eb35314154dc2ce0e3))
+
+## [1.14.0](https://github.com/jm33-m0/emp3r0r/compare/v1.13.0...v1.14.0) (2022-03-31)
+
+
+### Features
+
+* add verification to handshake process ([6a9fc04](https://github.com/jm33-m0/emp3r0r/commit/6a9fc0404c562c547e6676e95e2d8ec5a483279b))
+
 ## [1.13.0](https://github.com/jm33-m0/emp3r0r/compare/v1.12.0...v1.13.0) (2022-03-31)
 
 

